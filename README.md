@@ -565,7 +565,10 @@ Contributions are welcome! Please read our contributing guidelines before submit
 - ✅ **Source Tracking** - See where each position came from (Chat, Telegram, Platform, etc.)
 - ✅ **Visual Indicators** - Unique icons and colors for each source type
 - ✅ **Auto-Refresh** - Positions update every 30 seconds
+- ✅ **Event System** - Auto-refresh when positions opened via chat
+- ✅ **Visibility Detection** - Refresh when tab becomes visible
 - ✅ **Integration Flow**: Chat Bot → Demo API → Position DB → Positions Table UI
+- ✅ **Auto-Display**: Positions opened via chat instantly appear in table
 
 ### Oracle Chat System
 - ✅ **WebSocket Chat Service** (port 3005) - Two-way real-time communication

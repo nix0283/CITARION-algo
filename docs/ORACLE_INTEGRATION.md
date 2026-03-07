@@ -101,6 +101,41 @@ Each position tracks its origin:
 | **EXTERNAL** | 🔗 ExternalLink | Purple | Detected on exchange |
 | **SIGNAL** | 📈 TrendingUp | Amber | From signal provider |
 
+## Chat-to-Position Auto-Display
+
+When a position is opened via chat, it automatically appears in the Positions table:
+
+```
+┌─────────────┐      ┌─────────────┐      ┌─────────────┐
+│ Chat Bot    │─────▶│ Demo API    │─────▶│ Database    │
+│ (Signal)    │      │ POST /trade │      │ Position    │
+└─────────────┘      └─────────────┘      └─────────────┘
+       │                                          │
+       │ dispatchEvent("position-opened")         │
+       │                                          ▼
+       │             ┌─────────────────────────────────┐
+       └────────────▶│ PositionsTable                  │
+                     │ - Listens for position-opened   │
+                     │ - Auto-refresh on event         │
+                     │ - Shows source column: "Chat" 💬│
+                     └─────────────────────────────────┘
+```
+
+### Event System
+
+| Event | Trigger | Listener Action |
+|-------|---------|-----------------|
+| `position-opened` | Position created via chat | Refresh positions table |
+| `position-closed` | Position closed | Update positions list |
+| `visibilitychange` | Tab becomes visible | Fetch latest positions |
+
+### Auto-Refresh Triggers
+
+1. **Immediate**: After chat position execution
+2. **Periodic**: Every 30 seconds
+3. **On Focus**: When user returns to tab
+4. **Manual**: Refresh button (🔄)
+
 ## API Endpoints
 
 ### Demo Trading (No Auth Required)

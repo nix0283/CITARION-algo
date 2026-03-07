@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useCryptoStore, Position } from "@/stores/crypto-store";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -26,6 +26,7 @@ import {
   Bot,
   Monitor,
   ExternalLink as ExternalLinkIcon,
+  RefreshCw,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -62,32 +63,64 @@ export function PositionsTable() {
   const isDemo = account?.accountType === "DEMO";
 
   // Fetch positions from API
-  useEffect(() => {
-    const fetchPositions = async () => {
-      try {
-        const response = await fetch("/api/trade/open?demo=true");
-        const data = await response.json();
-        if (data.success) {
-          setApiPositions(data.positions || []);
-        }
-      } catch (error) {
-        console.error("Failed to fetch positions:", error);
-      } finally {
-        setIsLoading(false);
+  const fetchPositions = useCallback(async () => {
+    try {
+      setIsLoading(true);
+      // Use demo API which doesn't require authentication
+      const response = await fetch("/api/demo/trade");
+      const data = await response.json();
+      if (data.success) {
+        setApiPositions(data.positions || []);
       }
-    };
+    } catch (error) {
+      console.error("Failed to fetch positions:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
 
+  useEffect(() => {
     fetchPositions();
     // Refresh every 30 seconds
     const interval = setInterval(fetchPositions, 30000);
-    return () => clearInterval(interval);
-  }, []);
+    
+    // Listen for position-opened event from chat
+    const handlePositionOpened = (e: CustomEvent) => {
+      console.log("[PositionsTable] Position opened event received:", e.detail);
+      fetchPositions();
+    };
+    window.addEventListener("position-opened", handlePositionOpened as EventListener);
+    
+    // Listen for position-closed event
+    const handlePositionClosed = () => {
+      console.log("[PositionsTable] Position closed event received");
+      fetchPositions();
+    };
+    window.addEventListener("position-closed", handlePositionClosed);
+    
+    // Listen for visibility change to refresh when tab becomes visible
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        console.log("[PositionsTable] Tab visible, refreshing positions");
+        fetchPositions();
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener("position-opened", handlePositionOpened as EventListener);
+      window.removeEventListener("position-closed", handlePositionClosed);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [fetchPositions]);
 
   const handleClosePosition = async (positionId: string) => {
     try {
       setClosingId(positionId);
       
-      const response = await fetch("/api/trade/close", {
+      // Use demo close API for demo positions
+      const response = await fetch("/api/demo/close", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ positionId }),
@@ -100,9 +133,9 @@ export function PositionsTable() {
         setApiPositions(prev => prev.filter(p => p.id !== positionId));
         removePosition(positionId);
         
-        const pnl = result.pnl?.value || 0;
-        const pnlEmoji = pnl >= 0 ? "🟢" : "🔴";
-        toast.success(`${pnlEmoji} Позиция закрыта. PnL: $${pnl.toFixed(2)}`);
+        toast.success(result.message || "Позиция закрыта");
+        // Dispatch event for other components
+        window.dispatchEvent(new CustomEvent("position-closed", { detail: { positionId } }));
       } else {
         toast.error(result.error || "Ошибка при закрытии позиции");
       }
@@ -168,6 +201,15 @@ export function PositionsTable() {
                 <span className="text-xs text-amber-500 ml-1">[DEMO]</span>
               )}
             </CardTitle>
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              onClick={() => fetchPositions()}
+              disabled={isLoading}
+              title="Обновить"
+            >
+              <RefreshCw className={cn("h-4 w-4", isLoading && "animate-spin")} />
+            </Button>
           </div>
         </CardHeader>
         <CardContent>

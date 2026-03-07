@@ -227,6 +227,13 @@ export function ChatBot() {
           type: "signal",
           data: data.position,
         });
+        // Dispatch event to update positions table
+        console.log("[ChatBot] Dispatching position-opened event:", data.position);
+        window.dispatchEvent(new CustomEvent("position-opened", { 
+          detail: data.position 
+        }));
+        // Also dispatch to window for other components
+        window.dispatchEvent(new Event("position-opened"));
       } else {
         toast.error(data.error || "Failed", { id: "execute" });
         addMessage({
