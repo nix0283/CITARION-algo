@@ -157,6 +157,13 @@ CITARION is a comprehensive algorithmic trading platform designed for institutio
 - **Features**: Position sizing, Stop-loss adjustment, Signal weighting
 - **Real-time Data**: Binance API integration
 
+#### Genetic Algorithm Optimizer
+- **Bot Templates**: DCA, BB, ORION, LOGOS, GRID, MFT (6 types)
+- **API Endpoints**: `/api/ga/optimize`, `/api/ga/progress`, `/api/ga/apply`
+- **GARCH Integration**: Volatility-aware parameter optimization
+- **Features**: Dynamic mutation rates, Fitness penalty, Exploration boost
+- **Volatility Regimes**: Low (0.8x), Normal (1.0x), High (1.3x), Extreme (1.5x mutation)
+
 ---
 
 ## 🛠️ Technology Stack
@@ -553,7 +560,15 @@ Contributions are welcome! Please read our contributing guidelines before submit
 
 ## 📋 Recent Updates
 
-### GARCH Volatility Integration (Latest)
+### Genetic Algorithm Optimizer (Latest)
+- ✅ GA Service for Optimization Job Management
+- ✅ API Endpoints: optimize, progress, apply
+- ✅ GARCH Integration for Volatility-Aware Optimization
+- ✅ 6 Bot Templates: DCA, BB, ORION, LOGOS, GRID, MFT
+- ✅ Dynamic Mutation Rates by Volatility Regime
+- ✅ Fitness Penalty for Unstable Market Conditions
+
+### GARCH Volatility Integration
 - ✅ GARCH Integration Service for Trading Bots
 - ✅ LOGOS Signal Weighting by Volatility Regime
 - ✅ Gradient Boosting GARCH Features (9 new features)
