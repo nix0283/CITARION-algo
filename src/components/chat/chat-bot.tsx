@@ -452,10 +452,9 @@ export function ChatBot() {
               onChange={(e) => setInput(e.target.value)}
               placeholder="Signal or command (help, long, short, close all...)"
               className="flex-1"
-              disabled={!isConnected}
               autoFocus
             />
-            <Button type="submit" size="icon" disabled={!isConnected || !input.trim()}>
+            <Button type="submit" size="icon" disabled={!input.trim()}>
               <Send className="h-4 w-4" />
             </Button>
           </form>
