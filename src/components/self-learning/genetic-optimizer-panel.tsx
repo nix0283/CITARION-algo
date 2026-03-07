@@ -483,7 +483,7 @@ export function GeneticOptimizerPanel() {
                 <p className="text-xs text-amber-500 flex items-start gap-1">
                   <AlertTriangle className="h-3 w-3 mt-0.5 shrink-0" />
                   <span>
-                    Bot must exist in the system. Create bot first in Trading Bots section, then optimize.
+                    <strong>Важно:</strong> Бот должен существовать в системе. Сначала создайте бота в соответствующем разделе (DCA Bot → Крон, BB Bot, Grid Bot, ORION Bot, MFT Bot), затем оптимизируйте параметры.
                   </span>
                 </p>
               </div>
