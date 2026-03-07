@@ -2576,3 +2576,39 @@ model GAOptimizationJob {
   @@index([status, createdAt])
   @@index([botType, symbol])
 }
+
+// ==================== VISION BOT TRAINING DATA ====================
+// Training data collected from Vision Bot forecasts for ML model training
+
+model VisionTrainingData {
+  id String @id @default(cuid())
+
+  // Identification
+  symbol    String // e.g., BTC/USDT
+  timestamp DateTime // When the forecast was made
+
+  // Features (JSON array of numbers)
+  features String // JSON: number[]
+
+  // Forecast data
+  signal     String // LONG, SHORT, NEUTRAL
+  confidence Float  // 0-1
+
+  // Outcome (filled after 24h)
+  actualOutcome    Float? // Actual price change after 24h
+  wasCorrect       Boolean?
+  feedbackReceived Boolean @default(false)
+
+  // Metadata
+  exchange     String @default("binance")
+  timeframe    String @default("1h")
+  dataPoints   Int @default(0)
+  mlServiceUsed Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([symbol, timestamp])
+  @@index([symbol, feedbackReceived])
+  @@index([timestamp])
+}

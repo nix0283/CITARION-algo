@@ -1,0 +1,159 @@
+# =============================================================================
+# CITARION Trading Platform - Python Requirements
+# =============================================================================
+# This file consolidates all Python dependencies for the algorithmic trading
+# platform including ML services, RL agents, and trading infrastructure.
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Web Services & API Framework
+# -----------------------------------------------------------------------------
+# FastAPI framework for building REST APIs
+fastapi==0.109.0
+# ASGI server for FastAPI
+uvicorn[standard]==0.27.0
+# Required for form data parsing in FastAPI
+python-multipart==0.0.6
+
+# -----------------------------------------------------------------------------
+# Deep Learning - TensorFlow / Keras
+# -----------------------------------------------------------------------------
+# TensorFlow for neural network models (price prediction, LSTM)
+tensorflow==2.15.0
+# High-level neural networks API (bundled with TensorFlow 2.x)
+keras==2.15.0
+# HDF5 file format for saving Keras models
+h5py==3.10.0
+
+# -----------------------------------------------------------------------------
+# Reinforcement Learning
+# -----------------------------------------------------------------------------
+# PyTorch for RL agents (PPO, SAC, DQN)
+torch==2.2.0
+# Stable Baselines3 - RL algorithms implementation
+stable-baselines3==2.2.1
+# Gymnasium (formerly OpenAI Gym) for RL environments
+gymnasium==0.29.1
+# TensorBoard for training visualization
+tensorboard==2.15.1
+
+# -----------------------------------------------------------------------------
+# Machine Learning
+# -----------------------------------------------------------------------------
+# Core ML library for classification, regression, clustering
+scikit-learn==1.4.0
+# Hidden Markov Models for market regime detection
+hmmlearn==0.3.0
+# Gradient boosting for signal classification (optional - xgboost)
+# xgboost==2.0.3  # Uncomment if using XGBoost classifier
+
+# -----------------------------------------------------------------------------
+# Data Processing & Numerical Computing
+# -----------------------------------------------------------------------------
+# Core data manipulation library
+pandas==2.2.0
+# Numerical computing foundation
+numpy==1.26.3
+
+# -----------------------------------------------------------------------------
+# Hyperparameter Optimization
+# -----------------------------------------------------------------------------
+# Optuna for automated hyperparameter tuning
+optuna==3.5.0
+
+# -----------------------------------------------------------------------------
+# Async I/O & Networking
+# -----------------------------------------------------------------------------
+# WebSocket client/server implementation
+websockets==12.0
+# Async HTTP client for external API calls
+aiohttp==3.9.1
+
+# -----------------------------------------------------------------------------
+# Data Validation & Serialization
+# -----------------------------------------------------------------------------
+# Data validation using Python type annotations
+pydantic==2.6.0
+
+# -----------------------------------------------------------------------------
+# Configuration Management
+# -----------------------------------------------------------------------------
+# YAML parser for configuration files
+pyyaml==6.0.1
+# Environment variable management
+python-dotenv==1.0.0
+
+# -----------------------------------------------------------------------------
+# Model Persistence & Serialization
+# -----------------------------------------------------------------------------
+# Lightweight pipelining and model persistence
+joblib==1.3.2
+
+# -----------------------------------------------------------------------------
+# Date & Time Utilities
+# -----------------------------------------------------------------------------
+# Extensions to the standard datetime module
+python-dateutil==2.8.2
+# Timezone definitions
+pytz==2024.1
+
+# -----------------------------------------------------------------------------
+# Exchange Connectivity & Trading
+# -----------------------------------------------------------------------------
+# Unified cryptocurrency exchange API
+ccxt==4.2.25
+# Alpaca trading API (for stocks/crypto)
+alpaca-trade-api==3.2.0
+# Interactive Brokers API
+ibapi==9.81.1
+
+# -----------------------------------------------------------------------------
+# Lumibot Trading Framework
+# -----------------------------------------------------------------------------
+# Algorithmic trading library with multiple broker support
+lumibot==3.8.8
+
+# -----------------------------------------------------------------------------
+# Caching & Message Queue
+# -----------------------------------------------------------------------------
+# Redis client for caching and pub/sub
+redis==5.0.1
+
+# -----------------------------------------------------------------------------
+# Additional Scientific Computing (Optional)
+# -----------------------------------------------------------------------------
+# Scientific and technical computing
+scipy==1.12.0
+# Statistical modeling
+statsmodels==0.14.1
+
+# -----------------------------------------------------------------------------
+# Technical Analysis
+# -----------------------------------------------------------------------------
+# Technical analysis library for financial indicators
+ta-lib==0.4.28  # Requires TA-Lib C library installation
+# Pure Python technical analysis (alternative to ta-lib)
+pandas-ta==0.3.14b
+
+# -----------------------------------------------------------------------------
+# Logging & Monitoring
+# -----------------------------------------------------------------------------
+# Structured logging
+structlog==24.1.0
+
+# -----------------------------------------------------------------------------
+# Security & Authentication
+# -----------------------------------------------------------------------------
+# Cryptographic utilities for API key encryption
+cryptography==42.0.0
+
+# =============================================================================
+# Development Dependencies (optional)
+# =============================================================================
+# Uncomment the following lines for development:
+# pytest==8.0.0
+# pytest-asyncio==0.23.3
+# black==24.1.1
+# ruff==0.1.14
+# mypy==1.8.0
+# pre-commit==3.6.0

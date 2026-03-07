@@ -617,3 +617,34 @@ export type {
   ForecastSignals,
   ForecastServiceConfig,
 } from './forecast-service';
+
+// Re-export enhanced modules
+export {
+  getMLServiceClient,
+  MLServiceClient,
+  extractFeatures,
+  featuresToArray,
+  prepareSequenceData,
+  type MLPredictionResponse,
+  type SignalClassificationResponse,
+  type RegimeDetectionResponse,
+  type MLServiceHealth,
+} from './ml-service-client';
+
+export {
+  getRealDataProvider,
+  RealDataProvider,
+  getDataSyncService,
+  DataSyncService,
+  ohlcvToMarketData as realOhlcvToMarketData,
+  validateMarketData,
+} from './real-data-provider';
+
+export {
+  getEnhancedVisionManager,
+  EnhancedVisionBotWorker,
+  TrainingFeedbackService,
+  type EnhancedForecast,
+  type VisionMLConfig,
+  type TrainingDataRecord,
+} from './vision-ml-integration';

@@ -1,596 +1,348 @@
 /**
- * Vision Bot API Endpoint
- *
- * POST   /api/bots/vision      - Create new Vision bot
- * GET    /api/bots/vision      - List all Vision bots
- * GET    /api/bots/vision?id=X - Get specific bot status
- * DELETE /api/bots/vision?id=X - Delete a bot
- * PUT    /api/bots/vision      - Update bot configuration
- *
- * POST   /api/bots/vision?action=start    - Start a bot
- * POST   /api/bots/vision?action=stop     - Stop a bot
- * POST   /api/bots/vision?action=forecast - Run forecast
- * POST   /api/bots/vision?action=backtest - Run backtest
+ * Vision Bot API - Enhanced with Real Data and ML Integration
+ * 
+ * Provides:
+ * - GET: Get bot status and forecasts
+ * - POST: Create/run bot
+ * - PUT: Update configuration
+ * - DELETE: Stop and remove bot
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db';
-import {
-  getVisionManager,
-  VisionBacktester,
-} from '@/lib/vision-bot';
-import type {
-  VisionBotStatus,
-  StrategyType,
-} from '@/lib/vision-bot/types';
-import { DEFAULT_VISION_CONFIG } from '@/lib/vision-bot/types';
+import { getEnhancedVisionManager } from '@/lib/vision-bot/vision-ml-integration';
+import { getMLServiceClient } from '@/lib/vision-bot/ml-service-client';
+import { getRealDataProvider } from '@/lib/vision-bot/real-data-provider';
+import { DEFAULT_VISION_CONFIG, type VisionBotConfig } from '@/lib/vision-bot/types';
+import { v4 as uuidv4 } from 'uuid';
 
-// --------------------------------------------------
-// GET handlers
-// --------------------------------------------------
+// =====================================================
+// GET - Status and Forecast
+// =====================================================
 
 export async function GET(request: NextRequest) {
-  const { searchParams } = new URL(request.url);
-  const id = searchParams.get('id');
-  const accountId = searchParams.get('accountId');
-
+  const searchParams = request.nextUrl.searchParams;
+  const action = searchParams.get('action') || 'status';
+  const botId = searchParams.get('botId');
+  
+  const manager = getEnhancedVisionManager();
+  
   try {
-    // Get specific bot by ID
-    if (id) {
-      const bot = await db.visionBot.findUnique({
-        where: { id },
-      });
-
-      if (!bot) {
-        return NextResponse.json(
-          { success: false, error: 'Bot not found' },
-          { status: 404 }
-        );
-      }
-
-      // Get runtime status from manager if running
-      const manager = getVisionManager();
-      const worker = manager.getBot(id);
-
-      if (worker) {
-        const status = worker.getStatus();
+    switch (action) {
+      case 'status': {
+        // Get all bot statuses
+        const statuses = manager.getAllStatuses();
+        
         return NextResponse.json({
           success: true,
-          bot: {
-            ...bot,
-            runtimeStatus: status,
-          },
+          bots: statuses,
+          mlService: await getMLServiceClient().healthCheck(),
         });
       }
-
-      // Return static bot data if not running
-      return NextResponse.json({
-        success: true,
-        bot: {
-          ...bot,
-          runtimeStatus: {
-            id,
-            isRunning: false,
-            currentSignal: 'NEUTRAL',
-            equity: bot.initialCapital,
-            trades: [],
-            totalReturn: 0,
-            winRate: 0,
-            sharpeRatio: 0,
-            maxDrawdown: bot.maxDrawdown,
-          } as VisionBotStatus,
-        },
-      });
+      
+      case 'forecast': {
+        // Run a forecast for a symbol
+        const symbol = searchParams.get('symbol') || 'BTCUSDT';
+        const timeframe = searchParams.get('timeframe') || '1h';
+        const lookbackDays = parseInt(searchParams.get('lookbackDays') || '30');
+        
+        const provider = getRealDataProvider();
+        const mlClient = getMLServiceClient();
+        
+        // Fetch real data
+        const marketData = await provider.fetchMarketData(symbol, timeframe, lookbackDays);
+        
+        // Get ML status
+        const mlHealth = await mlClient.healthCheck();
+        
+        return NextResponse.json({
+          success: true,
+          symbol,
+          dataPoints: marketData.data.length,
+          exchange: marketData.exchange,
+          timestamp: marketData.timestamp,
+          cached: marketData.cached,
+          mlService: mlHealth,
+          latestPrice: marketData.data[marketData.data.length - 1]?.close || 0,
+        });
+      }
+      
+      case 'ml-status': {
+        // Check ML Service health
+        const mlClient = getMLServiceClient();
+        const health = await mlClient.healthCheck();
+        const models = await mlClient.getModels();
+        
+        return NextResponse.json({
+          success: true,
+          health,
+          models: models.models,
+        });
+      }
+      
+      case 'training-stats': {
+        // Get training data statistics
+        const feedbackService = manager.getFeedbackService();
+        const symbol = searchParams.get('symbol') || undefined;
+        const stats = await feedbackService.getStats(symbol);
+        
+        return NextResponse.json({
+          success: true,
+          stats,
+        });
+      }
+      
+      case 'bot': {
+        // Get specific bot status
+        if (!botId) {
+          return NextResponse.json(
+            { success: false, error: 'botId required' },
+            { status: 400 }
+          );
+        }
+        
+        const bot = manager.getBot(botId);
+        if (!bot) {
+          return NextResponse.json(
+            { success: false, error: 'Bot not found' },
+            { status: 404 }
+          );
+        }
+        
+        return NextResponse.json({
+          success: true,
+          status: bot.getStatus(),
+          mlStatus: bot.getMLStatus(),
+        });
+      }
+      
+      default:
+        return NextResponse.json(
+          { success: false, error: `Unknown action: ${action}` },
+          { status: 400 }
+        );
     }
-
-    // List all bots (optionally filtered by accountId)
-    const where = accountId ? { accountId } : {};
-    
-    const bots = await db.visionBot.findMany({
-      where,
-      orderBy: { createdAt: 'desc' },
-    });
-
-    // Get running bots status
-    const manager = getVisionManager();
-    const runningStatuses = manager.getAllStatuses();
-    const runningMap = new Map(runningStatuses.map(s => [s.id, s]));
-
-    // Merge database data with runtime status
-    const botsWithStatus = bots.map(bot => ({
-      ...bot,
-      runtimeStatus: runningMap.get(bot.id) || {
-        id: bot.id,
-        isRunning: false,
-        currentSignal: 'NEUTRAL',
-        equity: bot.initialCapital,
-        trades: [],
-        totalReturn: 0,
-        winRate: 0,
-        sharpeRatio: 0,
-        maxDrawdown: bot.maxDrawdown,
-      },
-    }));
-
-    return NextResponse.json({
-      success: true,
-      bots: botsWithStatus,
-      count: bots.length,
-    });
   } catch (error) {
-    console.error('Vision GET error:', error);
+    console.error('[Vision API] GET error:', error);
     return NextResponse.json(
-      { success: false, error: String(error) },
+      { success: false, error: error instanceof Error ? error.message : 'Unknown error' },
       { status: 500 }
     );
   }
 }
 
-// --------------------------------------------------
-// POST handlers
-// --------------------------------------------------
+// =====================================================
+// POST - Create and Start Bot
+// =====================================================
 
 export async function POST(request: NextRequest) {
-  const { searchParams } = new URL(request.url);
-  const action = searchParams.get('action');
-
   try {
-    const body = await request.json().catch(() => ({}));
-
-    // Handle different actions
+    const body = await request.json();
+    const { action, config, mlConfig } = body;
+    
+    const manager = getEnhancedVisionManager();
+    
     switch (action) {
-      case 'start':
-        return await handleStart(searchParams.get('id'));
-
-      case 'stop':
-        return await handleStop(searchParams.get('id'));
-
-      case 'forecast':
-        return await handleForecast(searchParams.get('id'));
-
-      case 'backtest':
-        return await handleBacktest(body);
-
-      case 'create':
+      case 'create': {
+        // Create new bot
+        const botId = config?.id || uuidv4();
+        
+        const botConfig: VisionBotConfig = {
+          ...DEFAULT_VISION_CONFIG,
+          ...config,
+          id: botId,
+          name: config?.name || `Vision-${botId.slice(0, 8)}`,
+        } as VisionBotConfig;
+        
+        const bot = await manager.createBot(botConfig, mlConfig);
+        
+        return NextResponse.json({
+          success: true,
+          botId,
+          message: 'Bot created successfully',
+          status: bot.getStatus(),
+        });
+      }
+      
+      case 'start': {
+        // Start existing bot
+        const botId = body.botId;
+        if (!botId) {
+          return NextResponse.json(
+            { success: false, error: 'botId required' },
+            { status: 400 }
+          );
+        }
+        
+        await manager.startBot(botId);
+        
+        return NextResponse.json({
+          success: true,
+          botId,
+          message: 'Bot started',
+        });
+      }
+      
+      case 'forecast': {
+        // Run single forecast without creating bot
+        const symbol = body.symbol || 'BTCUSDT';
+        const timeframe = body.timeframe || '1h';
+        const lookbackDays = body.lookbackDays || 30;
+        
+        const provider = getRealDataProvider();
+        
+        // Create temporary bot for forecast
+        const tempId = `temp-${Date.now()}`;
+        const tempConfig: VisionBotConfig = {
+          ...DEFAULT_VISION_CONFIG,
+          id: tempId,
+          name: 'Temp Forecast',
+          cryptoSymbols: [symbol],
+          timeframe: timeframe as '1h' | '4h' | '1d',
+          lookbackDays,
+        } as VisionBotConfig;
+        
+        const bot = await manager.createBot(tempConfig, { useRealData: true });
+        const forecast = await bot.runForecast();
+        manager.removeBot(tempId);
+        
+        return NextResponse.json({
+          success: true,
+          forecast,
+        });
+      }
+      
+      case 'train': {
+        // Trigger ML model training
+        const mlClient = getMLServiceClient();
+        const symbol = body.symbol;
+        
+        // Export training data
+        const feedbackService = manager.getFeedbackService();
+        const { X, y } = await feedbackService.exportTrainingData(symbol);
+        
+        if (X.length < 10) {
+          return NextResponse.json({
+            success: false,
+            error: 'Insufficient training data (need at least 10 samples)',
+            dataCount: X.length,
+          });
+        }
+        
+        // Train model
+        const result = await mlClient.trainModel({
+          model_type: 'signal_classifier',
+          X,
+          y,
+          epochs: body.epochs || 100,
+          batch_size: body.batchSize || 32,
+        });
+        
+        return NextResponse.json({
+          success: true,
+          result,
+          samplesTrained: X.length,
+        });
+      }
+      
+      case 'update-outcomes': {
+        // Update training data with actual outcomes
+        const symbol = body.symbol;
+        const feedbackService = manager.getFeedbackService();
+        const updated = await feedbackService.updateOutcomes(symbol);
+        
+        return NextResponse.json({
+          success: true,
+          updated,
+        });
+      }
+      
       default:
-        return await handleCreate(body);
+        return NextResponse.json(
+          { success: false, error: `Unknown action: ${action}` },
+          { status: 400 }
+        );
     }
   } catch (error) {
-    console.error('Vision POST error:', error);
+    console.error('[Vision API] POST error:', error);
     return NextResponse.json(
-      { success: false, error: String(error) },
+      { success: false, error: error instanceof Error ? error.message : 'Unknown error' },
       { status: 500 }
     );
   }
 }
 
-// --------------------------------------------------
-// PUT handler (Update bot configuration)
-// --------------------------------------------------
+// =====================================================
+// PUT - Update Configuration
+// =====================================================
 
 export async function PUT(request: NextRequest) {
-  const { searchParams } = new URL(request.url);
-  const id = searchParams.get('id');
-
-  if (!id) {
-    return NextResponse.json(
-      { success: false, error: 'Bot ID required' },
-      { status: 400 }
-    );
-  }
-
   try {
     const body = await request.json();
-
-    // Check if bot exists
-    const existing = await db.visionBot.findUnique({
-      where: { id },
-    });
-
-    if (!existing) {
+    const { botId, config } = body;
+    
+    if (!botId) {
+      return NextResponse.json(
+        { success: false, error: 'botId required' },
+        { status: 400 }
+      );
+    }
+    
+    const manager = getEnhancedVisionManager();
+    const bot = manager.getBot(botId);
+    
+    if (!bot) {
       return NextResponse.json(
         { success: false, error: 'Bot not found' },
         { status: 404 }
       );
     }
-
-    // Stop bot if running before update
-    const manager = getVisionManager();
-    const wasRunning = existing.status === 'RUNNING';
-    if (wasRunning) {
-      manager.stopBot(id);
-    }
-
-    // Update bot in database
-    const updated = await db.visionBot.update({
-      where: { id },
-      data: {
-        name: body.name ?? existing.name,
-        description: body.description ?? existing.description,
-        symbol: body.symbol ?? existing.symbol,
-        exchangeId: body.exchangeId ?? existing.exchangeId,
-        direction: body.direction ?? existing.direction,
-        leverage: body.leverage ?? existing.leverage,
-        marginMode: body.marginMode ?? existing.marginMode,
-        tradeAmount: body.tradeAmount ?? existing.tradeAmount,
-        useForecast: body.useForecast ?? existing.useForecast,
-        confidenceThreshold: body.confidenceThreshold ?? existing.confidenceThreshold,
-        riskProfile: body.riskProfile ?? existing.riskProfile,
-        strategy: body.strategy ?? existing.strategy,
-        stopLoss: body.stopLoss ?? existing.stopLoss,
-        takeProfit: body.takeProfit ?? existing.takeProfit,
-        trailingStop: body.trailingStop ? JSON.stringify(body.trailingStop) : existing.trailingStop,
-        cryptoSymbols: body.cryptoSymbols ? JSON.stringify(body.cryptoSymbols) : existing.cryptoSymbols,
-        stockIndices: body.stockIndices ? JSON.stringify(body.stockIndices) : existing.stockIndices,
-        timeframe: body.timeframe ?? existing.timeframe,
-        lookbackDays: body.lookbackDays ?? existing.lookbackDays,
-        tradingEnabled: body.tradingEnabled ?? existing.tradingEnabled,
-        tradingFee: body.tradingFee ?? existing.tradingFee,
-        initialCapital: body.initialCapital ?? existing.initialCapital,
-        forecastIntervalMinutes: body.forecastIntervalMinutes ?? existing.forecastIntervalMinutes,
-        tradingCycleHours: body.tradingCycleHours ?? existing.tradingCycleHours,
-        telegramEnabled: body.telegramEnabled ?? existing.telegramEnabled,
-        telegramChatId: body.telegramChatId ?? existing.telegramChatId,
-      },
-    });
-
-    // Restart bot if it was running
-    if (wasRunning) {
-      const config = dbBotToConfig(updated);
-      await manager.createBot(config);
-      await manager.startBot(id);
-    }
-
+    
+    bot.updateConfig(config);
+    
     return NextResponse.json({
       success: true,
-      bot: updated,
+      botId,
+      message: 'Configuration updated',
+      status: bot.getStatus(),
     });
   } catch (error) {
-    console.error('Vision PUT error:', error);
+    console.error('[Vision API] PUT error:', error);
     return NextResponse.json(
-      { success: false, error: String(error) },
+      { success: false, error: error instanceof Error ? error.message : 'Unknown error' },
       { status: 500 }
     );
   }
 }
 
-// --------------------------------------------------
-// DELETE handler
-// --------------------------------------------------
+// =====================================================
+// DELETE - Stop and Remove Bot
+// =====================================================
 
 export async function DELETE(request: NextRequest) {
-  const { searchParams } = new URL(request.url);
-  const id = searchParams.get('id');
-
-  if (!id) {
-    return NextResponse.json(
-      { success: false, error: 'Bot ID required' },
-      { status: 400 }
-    );
-  }
-
-  try {
-    // Stop bot if running
-    const manager = getVisionManager();
-    manager.stopBot(id);
-    manager.removeBot(id);
-
-    // Delete from database
-    await db.visionBot.delete({
-      where: { id },
-    });
-
-    return NextResponse.json({
-      success: true,
-      message: `Bot ${id} deleted`,
-    });
-  } catch (error) {
-    console.error('Vision DELETE error:', error);
-    return NextResponse.json(
-      { success: false, error: String(error) },
-      { status: 500 }
-    );
-  }
-}
-
-// --------------------------------------------------
-// Action handlers
-// --------------------------------------------------
-
-async function handleCreate(body: {
-  accountId: string;
-  name?: string;
-  description?: string;
-  symbol?: string;
-  exchangeId?: string;
-  direction?: string;
-  leverage?: number;
-  marginMode?: string;
-  tradeAmount?: number;
-  useForecast?: boolean;
-  confidenceThreshold?: number;
-  riskProfile?: string;
-  strategy?: string;
-  stopLoss?: number;
-  takeProfit?: number;
-  trailingStop?: { enabled: boolean; activationPercent: number; distancePercent: number };
-  cryptoSymbols?: string[];
-  stockIndices?: string[];
-  timeframe?: string;
-  lookbackDays?: number;
-  tradingEnabled?: boolean;
-  tradingFee?: number;
-  initialCapital?: number;
-  forecastIntervalMinutes?: number;
-  tradingCycleHours?: number;
-  telegramEnabled?: boolean;
-  telegramChatId?: string;
-}): Promise<NextResponse> {
-  if (!body.accountId) {
-    return NextResponse.json(
-      { success: false, error: 'accountId is required' },
-      { status: 400 }
-    );
-  }
-
-  // Verify account exists
-  const account = await db.account.findUnique({
-    where: { id: body.accountId },
-  });
-
-  if (!account) {
-    return NextResponse.json(
-      { success: false, error: 'Account not found' },
-      { status: 404 }
-    );
-  }
-
-  // Create bot in database
-  const bot = await db.visionBot.create({
-    data: {
-      accountId: body.accountId,
-      name: body.name || `Vision-${Date.now()}`,
-      description: body.description,
-      symbol: body.symbol || 'BTC/USDT',
-      exchangeId: body.exchangeId || 'binance',
-      direction: body.direction || 'LONG',
-      leverage: body.leverage ?? 10,
-      marginMode: body.marginMode || 'ISOLATED',
-      tradeAmount: body.tradeAmount ?? 100,
-      useForecast: body.useForecast ?? true,
-      confidenceThreshold: body.confidenceThreshold ?? 0.7,
-      riskProfile: body.riskProfile || 'normal',
-      strategy: body.strategy || 'reentry_24h',
-      stopLoss: body.stopLoss,
-      takeProfit: body.takeProfit,
-      trailingStop: body.trailingStop ? JSON.stringify(body.trailingStop) : null,
-      cryptoSymbols: body.cryptoSymbols ? JSON.stringify(body.cryptoSymbols) : '["BTC/USDT"]',
-      stockIndices: body.stockIndices ? JSON.stringify(body.stockIndices) : '[]',
-      timeframe: body.timeframe || '1h',
-      lookbackDays: body.lookbackDays ?? 30,
-      tradingEnabled: body.tradingEnabled ?? false,
-      tradingFee: body.tradingFee ?? 0.001,
-      initialCapital: body.initialCapital ?? 10000,
-      forecastIntervalMinutes: body.forecastIntervalMinutes ?? 60,
-      tradingCycleHours: body.tradingCycleHours ?? 24,
-      telegramEnabled: body.telegramEnabled ?? false,
-      telegramChatId: body.telegramChatId,
-      status: 'STOPPED',
-      isActive: false,
-    },
-  });
-
-  return NextResponse.json({
-    success: true,
-    bot,
-  });
-}
-
-async function handleStart(id: string | null): Promise<NextResponse> {
-  if (!id) {
-    return NextResponse.json(
-      { success: false, error: 'Bot ID required' },
-      { status: 400 }
-    );
-  }
-
-  // Get bot from database
-  const bot = await db.visionBot.findUnique({
-    where: { id },
-  });
-
-  if (!bot) {
-    return NextResponse.json(
-      { success: false, error: 'Bot not found' },
-      { status: 404 }
-    );
-  }
-
-  // Create worker and start
-  const manager = getVisionManager();
-  const config = dbBotToConfig(bot);
+  const searchParams = request.nextUrl.searchParams;
+  const botId = searchParams.get('botId');
   
-  let worker = manager.getBot(id);
-  if (!worker) {
-    worker = await manager.createBot(config);
-  }
-
-  await manager.startBot(id);
-
-  // Update database status
-  await db.visionBot.update({
-    where: { id },
-    data: {
-      status: 'RUNNING',
-      isActive: true,
-      startedAt: new Date(),
-      stoppedAt: null,
-    },
-  });
-
-  return NextResponse.json({
-    success: true,
-    message: `Bot ${id} started`,
-    status: worker.getStatus(),
-  });
-}
-
-async function handleStop(id: string | null): Promise<NextResponse> {
-  if (!id) {
+  if (!botId) {
     return NextResponse.json(
-      { success: false, error: 'Bot ID required' },
+      { success: false, error: 'botId required' },
       { status: 400 }
     );
   }
-
-  const manager = getVisionManager();
-  manager.stopBot(id);
-
-  // Update database status
-  await db.visionBot.update({
-    where: { id },
-    data: {
-      status: 'STOPPED',
-      isActive: false,
-      stoppedAt: new Date(),
-    },
-  });
-
-  return NextResponse.json({
-    success: true,
-    message: `Bot ${id} stopped`,
-  });
-}
-
-async function handleForecast(id: string | null): Promise<NextResponse> {
-  if (!id) {
-    return NextResponse.json(
-      { success: false, error: 'Bot ID required' },
-      { status: 400 }
-    );
-  }
-
-  const worker = getVisionManager().getBot(id);
-  if (!worker) {
-    return NextResponse.json(
-      { success: false, error: 'Bot not found or not started' },
-      { status: 404 }
-    );
-  }
-
-  const status = worker.getStatus();
-
-  // Update last forecast time in database
-  await db.visionBot.update({
-    where: { id },
-    data: { lastForecastAt: new Date() },
-  });
-
-  return NextResponse.json({
-    success: true,
-    forecast: status.currentForecast,
-    signal: status.currentSignal,
-  });
-}
-
-async function handleBacktest(body: {
-  symbol?: string;
-  strategy?: StrategyType;
-  days?: number;
-  initialCapital?: number;
-  riskPerTrade?: number;
-  leverage?: number;
-}): Promise<NextResponse> {
-  const {
-    symbol = 'BTC/USDT',
-    strategy = 'reentry_24h',
-    days = 365,
-    initialCapital = 10000,
-    riskPerTrade = 0.1,
-    leverage = 5,
-  } = body;
-
+  
   try {
-    const result = await VisionBacktester.runBacktest(
-      symbol,
-      strategy,
-      days,
-      initialCapital,
-      riskPerTrade,
-      leverage
-    );
-
+    const manager = getEnhancedVisionManager();
+    manager.removeBot(botId);
+    
     return NextResponse.json({
       success: true,
-      result,
+      botId,
+      message: 'Bot stopped and removed',
     });
   } catch (error) {
-    console.error('Backtest error:', error);
+    console.error('[Vision API] DELETE error:', error);
     return NextResponse.json(
-      { success: false, error: String(error) },
+      { success: false, error: error instanceof Error ? error.message : 'Unknown error' },
       { status: 500 }
     );
   }
-}
-
-// --------------------------------------------------
-// Helpers
-// --------------------------------------------------
-
-function dbBotToConfig(bot: {
-  id: string;
-  name: string;
-  symbol: string;
-  exchangeId: string;
-  direction: string;
-  leverage: number;
-  marginMode: string;
-  tradeAmount: number;
-  useForecast: boolean;
-  confidenceThreshold: number;
-  riskProfile: string;
-  strategy: string;
-  stopLoss: number | null;
-  takeProfit: number | null;
-  trailingStop: string | null;
-  cryptoSymbols: string;
-  stockIndices: string;
-  goldSymbol: string;
-  timeframe: string;
-  lookbackDays: number;
-  volatilityLow: number;
-  volatilityHigh: number;
-  trendThreshold: number;
-  correlationWeight: number;
-  tradingEnabled: boolean;
-  tradingFee: number;
-  initialCapital: number;
-  forecastIntervalMinutes: number;
-  tradingCycleHours: number;
-  telegramEnabled: boolean;
-  telegramChatId: string | null;
-}): ReturnType<typeof DEFAULT_VISION_CONFIG> & { id: string; name: string } {
-  return {
-    id: bot.id,
-    name: bot.name,
-    enabled: true,
-    cryptoSymbols: JSON.parse(bot.cryptoSymbols),
-    stockIndices: JSON.parse(bot.stockIndices),
-    goldSymbol: bot.goldSymbol,
-    timeframe: bot.timeframe,
-    lookbackDays: bot.lookbackDays,
-    volatilityLow: bot.volatilityLow,
-    volatilityHigh: bot.volatilityHigh,
-    trendThreshold: bot.trendThreshold,
-    correlationWeight: bot.correlationWeight,
-    tradingEnabled: bot.tradingEnabled,
-    strategy: bot.strategy as StrategyType,
-    riskProfile: bot.riskProfile as 'easy' | 'normal' | 'hard' | 'scalper',
-    initialCapital: bot.initialCapital,
-    tradingFee: bot.tradingFee,
-    telegramEnabled: bot.telegramEnabled,
-    telegramChatId: bot.telegramChatId || undefined,
-    forecastIntervalMinutes: bot.forecastIntervalMinutes,
-    tradingCycleHours: bot.tradingCycleHours,
-  };
 }

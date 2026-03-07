@@ -18,6 +18,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from api.routes import router
+from api.websocket import router as websocket_router, connection_manager
 from config.config import load_config
 from models.price_predictor import PricePredictorModel
 from models.signal_classifier import SignalClassifierModel
@@ -75,12 +76,21 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"Could not initialize Regime Detector: {e}")
     
+    # Initialize WebSocket connection manager
+    await connection_manager.start()
+    logger.info("WebSocket connection manager started")
+    
     logger.info("ML Service started on port 3006")
     
     yield
     
     # Shutdown
     logger.info("Shutting down ML Service...")
+    
+    # Stop WebSocket connection manager
+    await connection_manager.stop()
+    logger.info("WebSocket connection manager stopped")
+    
     models.clear()
 
 
@@ -101,6 +111,7 @@ app.add_middleware(
 
 # Include routers
 app.include_router(router, prefix="/api/v1")
+app.include_router(websocket_router)
 
 
 @app.get("/health")
@@ -110,6 +121,9 @@ async def health_check():
         "status": "healthy",
         "service": "ml-service",
         "models_loaded": {k: v is not None for k, v in models.items()},
+        "websocket": {
+            "active_connections": len(connection_manager._clients) if hasattr(connection_manager, '_clients') else 0,
+        },
     }
 
 
@@ -127,6 +141,21 @@ async def root():
             "/api/v1/train",
             "/api/v1/models",
         ],
+        "websocket": {
+            "endpoint": "/ws",
+            "message_types": [
+                "subscribe_predictions",
+                "unsubscribe",
+                "get_status",
+                "prediction_request",
+                "ping",
+            ],
+            "channels": [
+                "price_predictions",
+                "signal_predictions",
+                "regime_predictions",
+            ],
+        },
     }
 
 
