@@ -560,7 +560,14 @@ Contributions are welcome! Please read our contributing guidelines before submit
 
 ## 📋 Recent Updates
 
-### Oracle Chat System (Latest)
+### Positions Display & Source Tracking (Latest)
+- ✅ **Real API Data** - Positions loaded from database, not demo data
+- ✅ **Source Tracking** - See where each position came from (Chat, Telegram, Platform, etc.)
+- ✅ **Visual Indicators** - Unique icons and colors for each source type
+- ✅ **Auto-Refresh** - Positions update every 30 seconds
+- ✅ **Integration Flow**: Chat Bot → Demo API → Position DB → Positions Table UI
+
+### Oracle Chat System
 - ✅ **WebSocket Chat Service** (port 3005) - Two-way real-time communication
 - ✅ **Telegram Bot Service** (port 3006) - Standalone bot with polling
 - ✅ **Cornix API Integration** - Direct connection with API key

@@ -22,6 +22,10 @@ import {
   Loader2,
   Building2,
   Share2,
+  MessageSquare,
+  Bot,
+  Monitor,
+  ExternalLink as ExternalLinkIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -39,6 +43,7 @@ interface ApiPosition {
   stopLoss: number | null;
   takeProfit: number | null;
   createdAt: string;
+  source?: string; // CHAT, TELEGRAM, PLATFORM, EXTERNAL
   account: {
     exchangeId: string;
     exchangeName: string;
@@ -129,6 +134,23 @@ export function PositionsTable() {
     });
   };
 
+  // Get source icon and label
+  const getSourceInfo = (source?: string) => {
+    switch (source) {
+      case "CHAT":
+        return { icon: <MessageSquare className="h-3 w-3" />, label: "Chat", color: "text-blue-500" };
+      case "TELEGRAM":
+        return { icon: <Bot className="h-3 w-3" />, label: "Telegram", color: "text-sky-500" };
+      case "EXTERNAL":
+        return { icon: <ExternalLinkIcon className="h-3 w-3" />, label: "External", color: "text-purple-500" };
+      case "SIGNAL":
+        return { icon: <TrendingUp className="h-3 w-3" />, label: "Signal", color: "text-amber-500" };
+      case "PLATFORM":
+      default:
+        return { icon: <Monitor className="h-3 w-3" />, label: "Platform", color: "text-muted-foreground" };
+    }
+  };
+
   return (
     <>
       <Card>
@@ -172,6 +194,7 @@ export function PositionsTable() {
                     <TableHead className="w-[80px]">Биржа</TableHead>
                     <TableHead className="w-[100px]">Пара</TableHead>
                     <TableHead className="w-[80px]">Сторона</TableHead>
+                    <TableHead className="w-[70px]">Источник</TableHead>
                     <TableHead className="w-[100px]">Размер</TableHead>
                     <TableHead className="w-[100px]">Цена входа</TableHead>
                     <TableHead className="w-[100px]">Текущая</TableHead>
@@ -210,6 +233,17 @@ export function PositionsTable() {
                           )}
                           {position.direction}
                         </Badge>
+                      </TableCell>
+                      <TableCell>
+                        {(() => {
+                          const sourceInfo = getSourceInfo(position.source);
+                          return (
+                            <div className={cn("flex items-center gap-1", sourceInfo.color)} title={sourceInfo.label}>
+                              {sourceInfo.icon}
+                              <span className="text-xs">{sourceInfo.label}</span>
+                            </div>
+                          );
+                        })()}
                       </TableCell>
                       <TableCell className="font-mono text-sm">
                         {position.totalAmount.toFixed(4)}

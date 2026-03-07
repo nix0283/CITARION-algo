@@ -146,6 +146,7 @@ export async function POST(request: NextRequest) {
         symbol: symbol.toUpperCase(),
         direction,
         status: "OPEN",
+        source: "CHAT",
         totalAmount: quantity,
         filledAmount: quantity,
         avgEntryPrice: currentPrice,

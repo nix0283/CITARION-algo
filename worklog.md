@@ -803,3 +803,59 @@ Stage Summary:
 - Input field always enabled
 - All API endpoints tested and working
 - Pushed to GitHub
+
+---
+Task ID: 17
+Agent: Main Agent
+Task: Positions Display Integration with Real API Data
+
+Work Log:
+- Updated Positions Table Component (`/src/components/dashboard/positions-table.tsx`):
+  - Replaced demo data with real API data from `/api/trade/open`
+  - Added source tracking column showing where position came from
+  - Source types: CHAT, TELEGRAM, PLATFORM, EXTERNAL, SIGNAL
+  - Each source has unique icon and color:
+    - CHAT: MessageSquare icon, blue color
+    - TELEGRAM: Bot icon, sky color
+    - EXTERNAL: ExternalLink icon, purple color
+    - SIGNAL: TrendingUp icon, amber color
+    - PLATFORM: Monitor icon, gray color
+  - Auto-refresh every 30 seconds
+  - Loading and empty states
+
+- Updated Page.tsx:
+  - Changed PositionsView to use real PositionsTable component
+  - Removed demo data dependency for positions
+  - Imported PositionsTable from dashboard components
+
+- Updated Demo Trade API (`/src/app/api/demo/trade/route.ts`):
+  - Added `source: "CHAT"` to position creation
+  - Positions opened via chat bot now tagged with source
+  - Allows tracking where each position originated
+
+Integration Architecture:
+```
+Chat Bot (Oracle) → Demo API (/api/demo/trade) → Position DB
+                                                      ↓
+                                          PositionsTable (UI)
+                                                      ↓
+                                          Source Column: "Chat" 💬
+```
+
+Files Modified:
+- /src/components/dashboard/positions-table.tsx (added source tracking)
+- /src/app/page.tsx (switched to real API positions)
+- /src/app/api/demo/trade/route.ts (added source field)
+
+Testing Results:
+- Lint: 0 errors, 41 warnings
+- Positions opened via chat appear in Positions tab
+- Source column correctly shows "Chat" for chat-opened positions
+- All API endpoints working correctly
+
+Stage Summary:
+- Real positions from database now displayed in UI
+- Source tracking shows origin of each position
+- Chat-opened positions tagged with "CHAT" source
+- Auto-refresh keeps data current
+- Ready for production use

@@ -52,6 +52,7 @@ import { HFTBotPanel } from "@/components/bots/hft-bot-panel";
 import { MFTBotPanel } from "@/components/bots/mft-bot-panel";
 import { LFTBotPanel } from "@/components/bots/lft-bot-panel";
 import { ChatBot } from "@/components/chat/chat-bot";
+import { PositionsTable } from "@/components/dashboard/positions-table";
 import { HelpPanel } from "@/components/help/help-panel";
 import {
   LineChart,
@@ -302,7 +303,7 @@ function DashboardContent() {
           />
         );
       case "positions":
-        return <PositionsView positions={demoPositions} />;
+        return <PositionsTable />;
       case "trades":
         return <TradesView trades={demoTrades} />;
       case "analytics":
