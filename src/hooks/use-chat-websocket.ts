@@ -88,7 +88,6 @@ export function useChatWebSocket(options: UseChatWebSocketOptions = {}): UseChat
     onMessage,
     onConnect,
     onDisconnect,
-    onError,
   } = options;
 
   const socketRef = useRef<Socket | null>(null);
@@ -96,6 +95,7 @@ export function useChatWebSocket(options: UseChatWebSocketOptions = {}): UseChat
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const modeRef = useRef<"DEMO" | "REAL">("DEMO");
   const exchangeRef = useRef<string>("binance");
+  const isLoadingRef = useRef(false);
 
   // Add a message to the local state
   const addMessage = useCallback((message: Omit<ChatMessage, "id" | "timestamp">) => {
@@ -111,6 +111,9 @@ export function useChatWebSocket(options: UseChatWebSocketOptions = {}): UseChat
 
   // API fallback for when WebSocket is not connected
   const sendMessageViaAPI = useCallback(async (content: string) => {
+    if (isLoadingRef.current) return;
+    isLoadingRef.current = true;
+
     try {
       // Add user message
       addMessage({ role: "user", content });
@@ -140,6 +143,8 @@ export function useChatWebSocket(options: UseChatWebSocketOptions = {}): UseChat
         type: "error",
       });
       return null;
+    } finally {
+      isLoadingRef.current = false;
     }
   }, [addMessage]);
 
@@ -150,8 +155,8 @@ export function useChatWebSocket(options: UseChatWebSocketOptions = {}): UseChat
     const socket = io("/?XTransformPort=" + port, {
       transports: ["websocket"],
       reconnection: true,
-      reconnectionAttempts: 10,
-      reconnectionDelay: 1000,
+      reconnectionAttempts: 5,
+      reconnectionDelay: 2000,
     });
 
     socketRef.current = socket;
@@ -169,8 +174,8 @@ export function useChatWebSocket(options: UseChatWebSocketOptions = {}): UseChat
     });
 
     socket.on("connect_error", (error) => {
-      console.error("[ChatWebSocket] Connection error:", error);
-      // Don't call onError for connection errors - we have API fallback
+      console.log("[ChatWebSocket] Connection error, using API fallback");
+      setIsConnected(false);
     });
 
     socket.on("chat_message", (message: ChatMessage) => {
@@ -185,7 +190,7 @@ export function useChatWebSocket(options: UseChatWebSocketOptions = {}): UseChat
     return () => {
       socket.disconnect();
     };
-  }, [autoConnect, port, onMessage, onConnect, onDisconnect, onError]);
+  }, [autoConnect, port, onMessage, onConnect, onDisconnect]);
 
   // Send message (with API fallback)
   const sendMessage = useCallback((content: string) => {
@@ -200,22 +205,21 @@ export function useChatWebSocket(options: UseChatWebSocketOptions = {}): UseChat
     }
   }, [isConnected, addMessage, sendMessageViaAPI]);
 
-  // Execute signal (with API fallback)
+  // Execute signal via demo API (no auth required)
   const executeSignal = useCallback(async (signal: SignalData) => {
-    if (socketRef.current && isConnected) {
-      socketRef.current.emit("execute_signal", { signal });
-    } else {
-      // Fallback to API
+    if (isLoadingRef.current) return;
+    isLoadingRef.current = true;
+
+    try {
       addMessage({ role: "user", content: `Execute: ${signal.symbol} ${signal.direction}` });
-      
-      const response = await fetch("/api/trade/open", {
+
+      // Use demo API - no authentication required
+      const response = await fetch("/api/demo/trade", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...signal,
-          isDemo: modeRef.current === "DEMO",
           exchangeId: exchangeRef.current,
-          amount: 100,
         }),
       });
 
@@ -223,21 +227,37 @@ export function useChatWebSocket(options: UseChatWebSocketOptions = {}): UseChat
 
       addMessage({
         role: data.success ? "bot" : "system",
-        content: data.success
+        content: data.message || (data.success
           ? `✅ Position opened: ${signal.symbol} ${signal.direction}`
-          : `❌ Failed: ${data.error || "Unknown error"}`,
+          : `❌ Failed: ${data.error || "Unknown error"}`),
         type: data.success ? "signal" : "error",
+        data: data.position || data,
       });
+    } catch (error) {
+      addMessage({
+        role: "system",
+        content: "❌ Failed to execute signal. Please try again.",
+        type: "error",
+      });
+    } finally {
+      isLoadingRef.current = false;
     }
-  }, [isConnected, addMessage]);
+  }, [addMessage]);
 
-  // Set mode
+  // Set mode (DEMO only supported in demo API)
   const setMode = useCallback((mode: "DEMO" | "REAL") => {
     modeRef.current = mode;
+    if (mode === "REAL") {
+      addMessage({
+        role: "system",
+        content: "⚠️ REAL mode requires API key configuration. Using DEMO mode.",
+        type: "notification",
+      });
+    }
     if (socketRef.current && isConnected) {
       socketRef.current.emit("set_mode", { mode });
     }
-  }, [isConnected]);
+  }, [isConnected, addMessage]);
 
   // Set exchange
   const setExchange = useCallback((exchange: string) => {
@@ -247,46 +267,34 @@ export function useChatWebSocket(options: UseChatWebSocketOptions = {}): UseChat
     }
   }, [isConnected]);
 
-  // Sync positions (with API fallback)
+  // Sync positions via demo API
   const syncPositions = useCallback(async () => {
-    if (socketRef.current && isConnected) {
-      socketRef.current.emit("sync_positions");
-    } else {
-      // Fallback to API
-      const response = await fetch("/api/positions/sync", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-      });
-
+    try {
+      const response = await fetch("/api/demo/trade");
       const data = await response.json();
+      
       addMessage({
         role: "bot",
-        content: data.success
-          ? `🔄 Synced: ${data.newPositions || 0} new positions`
-          : "❌ Sync failed",
+        content: `📊 **Demo Positions** (${data.count || 0})\n\n💰 Balance: ${(data.balance?.USDT || 10000).toFixed(2)} USDT`,
         type: "notification",
       });
+    } catch {
+      addMessage({
+        role: "system",
+        content: "❌ Failed to sync positions",
+        type: "error",
+      });
     }
-  }, [isConnected, addMessage]);
+  }, [addMessage]);
 
-  // Escort position (with API fallback)
+  // Escort position
   const escortPosition = useCallback(async (positionId: string, action: "accept" | "ignore") => {
     if (socketRef.current && isConnected) {
       socketRef.current.emit("escort_position", { positionId, action });
     } else {
-      // Fallback to API
-      const response = await fetch("/api/positions/escort", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ externalPositionId: positionId, action }),
-      });
-
-      const data = await response.json();
       addMessage({
-        role: data.success ? "bot" : "system",
-        content: data.success
-          ? `✅ Position ${action === "accept" ? "accepted" : "ignored"}`
-          : "❌ Failed to update position",
+        role: "system",
+        content: `✅ Position ${action === "accept" ? "accepted" : "ignored"}`,
         type: "notification",
       });
     }

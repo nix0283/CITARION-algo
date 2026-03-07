@@ -23,8 +23,6 @@ import {
   Sparkles,
   Zap,
   AlertCircle,
-  FileText,
-  Check,
   Building2,
   Bell,
   BellRing,
@@ -32,62 +30,59 @@ import {
   ExternalLink,
   WifiOff,
   Wifi,
+  Loader2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
-import { useChatWebSocket, type ChatMessage, type SignalData, type ExternalPosition } from "@/hooks/use-chat-websocket";
 
 function formatNumber(num: number): string {
   return num.toLocaleString("en-US");
 }
 
 const EXCHANGES = [
-  { id: "binance", name: "Binance", hasTestnet: true, hasDemo: false },
-  { id: "bybit", name: "Bybit", hasTestnet: true, hasDemo: false },
-  { id: "okx", name: "OKX", hasTestnet: false, hasDemo: true },
-  { id: "bitget", name: "Bitget", hasTestnet: false, hasDemo: true },
-  { id: "kucoin", name: "KuCoin", hasTestnet: true, hasDemo: false },
-  { id: "bingx", name: "BingX", hasTestnet: false, hasDemo: true },
-  { id: "huobi", name: "HTX (Huobi)", hasTestnet: true, hasDemo: false },
-  { id: "hyperliquid", name: "HyperLiquid", hasTestnet: true, hasDemo: false },
-  { id: "bitmex", name: "BitMEX", hasTestnet: true, hasDemo: false },
-  { id: "blofin", name: "BloFin", hasTestnet: false, hasDemo: true },
-  { id: "coinbase", name: "Coinbase", hasTestnet: true, hasDemo: false },
-  { id: "aster", name: "Aster DEX", hasTestnet: true, hasDemo: true },
-  { id: "gate", name: "Gate.io", hasTestnet: true, hasDemo: true },
+  { id: "binance", name: "Binance", hasDemo: true },
+  { id: "bybit", name: "Bybit", hasDemo: true },
+  { id: "okx", name: "OKX", hasDemo: true },
+  { id: "bitget", name: "Bitget", hasDemo: true },
+  { id: "kucoin", name: "KuCoin", hasDemo: true },
+  { id: "bingx", name: "BingX", hasDemo: true },
+  { id: "gate", name: "Gate.io", hasDemo: true },
+  { id: "hyperliquid", name: "HyperLiquid", hasDemo: true },
 ];
+
+interface Message {
+  id: string;
+  role: "user" | "bot" | "system" | "notification";
+  content: string;
+  timestamp: Date;
+  type?: string;
+  data?: Record<string, unknown>;
+}
+
+interface ParsedSignal {
+  symbol: string;
+  direction: "LONG" | "SHORT";
+  entryPrices: number[];
+  takeProfits: { price: number; percentage: number }[];
+  stopLoss?: number;
+  leverage: number;
+  marketType: "SPOT" | "FUTURES";
+}
+
+function generateId(): string {
+  return `msg-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+}
 
 export function ChatBot() {
   const [input, setInput] = useState("");
   const [copiedId, setCopiedId] = useState<string | null>(null);
-  const [selectedExchange, setSelectedExchange] = useState("gate");
+  const [selectedExchange, setSelectedExchange] = useState("binance");
   const [mode, setMode] = useState<"DEMO" | "REAL">("DEMO");
+  const [isLoading, setIsLoading] = useState(false);
+  const [isConnected, setIsConnected] = useState(false);
+  const [messages, setMessages] = useState<Message[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
-
-  // WebSocket connection
-  const {
-    isConnected,
-    messages,
-    sendMessage: wsSendMessage,
-    executeSignal,
-    setExchange,
-    setMode: wsSetMode,
-    syncPositions,
-    escortPosition,
-  } = useChatWebSocket({
-    autoConnect: true,
-    onMessage: (message) => {
-      // Show toast for important messages
-      if (message.type === "notification" && message.data) {
-        const data = message.data as { priority?: string };
-        if (data.priority === "critical" || data.priority === "high") {
-          toast.error(message.content.split("\n")[0], {
-            description: message.content.split("\n").slice(1).join("\n"),
-          });
-        }
-      }
-    },
-  });
+  const eventSourceRef = useRef<EventSource | null>(null);
 
   const scrollToBottom = useCallback(() => {
     if (scrollRef.current) {
@@ -99,127 +94,246 @@ export function ChatBot() {
     scrollToBottom();
   }, [messages, scrollToBottom]);
 
-  // Update exchange on WebSocket
+  // SSE connection for notifications
   useEffect(() => {
-    setExchange(selectedExchange);
-  }, [selectedExchange, setExchange]);
+    const connectSSE = () => {
+      try {
+        const eventSource = new EventSource("/api/notifications");
+        eventSourceRef.current = eventSource;
 
-  // Update mode on WebSocket
-  useEffect(() => {
-    wsSetMode(mode);
-  }, [mode, wsSetMode]);
+        eventSource.onopen = () => setIsConnected(true);
+        eventSource.onerror = () => {
+          setIsConnected(false);
+          eventSource.close();
+          setTimeout(connectSSE, 5000);
+        };
 
-  const handleSend = () => {
-    if (!input.trim()) return;
-    wsSendMessage(input.trim());
+        eventSource.onmessage = (event) => {
+          try {
+            const notification = JSON.parse(event.data);
+            if (notification.title === "Connected") return;
+            
+            addMessage({
+              role: "notification",
+              content: `🔔 ${notification.title}\n\n${notification.message}`,
+              type: "notification",
+            });
+          } catch {
+            // Ignore parse errors
+          }
+        };
+      } catch {
+        setTimeout(connectSSE, 5000);
+      }
+    };
+
+    // Add welcome message
+    addMessage({
+      role: "bot",
+      content: `👋 **Привет! Я Oracle** — AI-бот для торговли.
+
+📌 **Возможности:**
+• Отправьте сигнал в Cornix формате
+• Команды: **help**, **positions**, **close all**
+• Выберите биржу и режим (DEMO)
+
+🔮 *Вижу сигналы там, где другие видят хаос.*
+
+Пример: \`BTCUSDT LONG Entry: 67000 TP: 68000 SL: 66000 Leverage: 10x\``,
+      type: "welcome",
+    });
+
+    connectSSE();
+
+    return () => {
+      eventSourceRef.current?.close();
+    };
+  }, []);
+
+  // Add a message
+  const addMessage = useCallback((msg: Omit<Message, "id" | "timestamp">) => {
+    const newMsg: Message = {
+      ...msg,
+      id: generateId(),
+      timestamp: new Date(),
+    };
+    setMessages((prev) => [...prev, newMsg]);
+    return newMsg;
+  }, []);
+
+  // Send message
+  const handleSend = async () => {
+    if (!input.trim() || isLoading) return;
+
+    const currentInput = input.trim();
     setInput("");
+    setIsLoading(true);
+
+    // Add user message
+    addMessage({ role: "user", content: currentInput });
+
+    try {
+      const response = await fetch("/api/chat/parse-signal", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: currentInput }),
+      });
+
+      const data = await response.json();
+
+      addMessage({
+        role: data.success ? "bot" : "system",
+        content: data.message || "Не удалось обработать сообщение",
+        type: data.type,
+        data: data.signal || data,
+      });
+    } catch {
+      addMessage({
+        role: "system",
+        content: "❌ Ошибка. Попробуйте ещё раз.",
+        type: "error",
+      });
+    } finally {
+      setIsLoading(false);
+      setTimeout(scrollToBottom, 100);
+    }
   };
 
-  const handleExecuteSignal = (signal: SignalData) => {
-    executeSignal(signal);
-    toast.success(`Executing ${signal.symbol} ${signal.direction}...`);
+  // Execute signal via demo API
+  const handleExecuteSignal = async (signal: ParsedSignal) => {
+    if (isLoading) return;
+    setIsLoading(true);
+
+    try {
+      toast.loading(`Opening ${signal.symbol} ${signal.direction}...`, { id: "execute" });
+
+      const response = await fetch("/api/demo/trade", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...signal,
+          exchangeId: selectedExchange,
+          amount: 100,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        toast.success(data.message, { id: "execute" });
+        addMessage({
+          role: "bot",
+          content: data.message,
+          type: "signal",
+          data: data.position,
+        });
+      } else {
+        toast.error(data.error || "Failed", { id: "execute" });
+        addMessage({
+          role: "system",
+          content: `❌ ${data.error || "Failed to open position"}`,
+          type: "error",
+        });
+      }
+    } catch (error) {
+      toast.error("Error executing signal", { id: "execute" });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const handleCopyTemplate = (template: string, messageId: string) => {
-    navigator.clipboard.writeText(template);
-    setCopiedId(messageId);
-    toast.success("Copied!");
-    setTimeout(() => setCopiedId(null), 2000);
+  // Sync positions
+  const handleSyncPositions = async () => {
+    if (isLoading) return;
+    setIsLoading(true);
+
+    try {
+      const response = await fetch("/api/demo/trade");
+      const data = await response.json();
+
+      addMessage({
+        role: "bot",
+        content: `📊 **Demo Positions** (${data.count || 0})\n\n💰 Balance: ${(data.balance?.USDT || 10000).toFixed(2)} USDT`,
+        type: "notification",
+      });
+    } catch {
+      addMessage({
+        role: "system",
+        content: "❌ Failed to sync",
+        type: "error",
+      });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const handleSyncPositions = () => {
-    syncPositions();
-    toast.loading("Syncing positions...", { id: "sync" });
-    setTimeout(() => toast.success("Sync initiated", { id: "sync" }), 1000);
-  };
+  // Close all positions
+  const handleCloseAll = async () => {
+    if (isLoading) return;
+    setIsLoading(true);
 
-  const handleEscortPosition = (positionId: string, action: "accept" | "ignore") => {
-    escortPosition(positionId, action);
-    toast.success(action === "accept" ? "Position accepted for escort" : "Position ignored");
+    try {
+      const response = await fetch("/api/demo/close-all", { method: "POST" });
+      const data = await response.json();
+
+      addMessage({
+        role: data.success ? "bot" : "system",
+        content: data.message || data.error,
+        type: data.success ? "notification" : "error",
+      });
+    } catch {
+      addMessage({
+        role: "system",
+        content: "❌ Failed to close positions",
+        type: "error",
+      });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const formatTime = (date: Date) => {
     return date.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });
   };
 
-  const getNotificationIcon = (type?: string) => {
-    if (!type) return <Bell className="h-4 w-4" />;
-    if (type.includes("TP")) return <TrendingUp className="h-4 w-4 text-green-500" />;
-    if (type.includes("SL")) return <TrendingDown className="h-4 w-4 text-red-500" />;
-    if (type.includes("EXTERNAL")) return <ExternalLink className="h-4 w-4 text-blue-500" />;
-    if (type.includes("WARNING") || type.includes("ERROR") || type.includes("RISK"))
-      return <AlertCircle className="h-4 w-4 text-orange-500" />;
-    return <Bell className="h-4 w-4" />;
-  };
-
-  const renderMessageContent = (message: ChatMessage) => {
-    const signal = message.type === "signal" ? (message.data as SignalData) : null;
-    const externalPos = message.type === "external-position" ? (message.data as ExternalPosition) : null;
+  const renderMessageContent = (message: Message) => {
+    const signal = message.type === "signal" && message.data ? 
+      (message.data as ParsedSignal) : null;
 
     return (
       <>
         <p className="whitespace-pre-wrap">{message.content}</p>
 
-        {/* Signal with Execute button */}
         {signal && (
           <div className="mt-2 rounded-lg border border-border bg-card p-3 text-left">
-            <div className="flex items-center justify-between mb-2">
-              <div className="flex items-center gap-2">
-                <Badge
-                  variant="outline"
-                  className={cn(
-                    "text-xs",
-                    signal.direction === "LONG"
-                      ? "bg-green-500/10 text-green-500 border-green-500/20"
-                      : "bg-red-500/10 text-red-500 border-red-500/20"
-                  )}
-                >
-                  {signal.direction === "LONG" ? (
-                    <TrendingUp className="h-3 w-3 mr-1" />
-                  ) : (
-                    <TrendingDown className="h-3 w-3 mr-1" />
-                  )}
-                  {signal.direction}
-                </Badge>
-                <span className="font-medium text-sm">{signal.symbol}</span>
-                <Badge variant="secondary" className="text-xs">
-                  {signal.leverage}x
-                </Badge>
-              </div>
+            <div className="flex items-center gap-2 mb-2">
+              <Badge
+                variant="outline"
+                className={cn(
+                  "text-xs",
+                  signal.direction === "LONG"
+                    ? "bg-green-500/10 text-green-500 border-green-500/20"
+                    : "bg-red-500/10 text-red-500 border-red-500/20"
+                )}
+              >
+                {signal.direction === "LONG" ? (
+                  <TrendingUp className="h-3 w-3 mr-1" />
+                ) : (
+                  <TrendingDown className="h-3 w-3 mr-1" />
+                )}
+                {signal.direction}
+              </Badge>
+              <span className="font-medium text-sm">{signal.symbol}</span>
+              <Badge variant="secondary" className="text-xs">
+                {signal.leverage}x
+              </Badge>
             </div>
-            <div className="grid grid-cols-2 gap-2 text-xs">
-              <div>
-                <span className="text-muted-foreground">Entry:</span>
-                <div className="flex flex-wrap gap-1 mt-0.5">
-                  {signal.entryPrices.map((price, i) => (
-                    <Badge key={i} variant="outline" className="text-xs">
-                      ${formatNumber(price)}
-                    </Badge>
-                  ))}
-                </div>
-              </div>
-              <div>
-                <span className="text-muted-foreground">TP:</span>
-                <div className="flex flex-wrap gap-1 mt-0.5">
-                  {signal.takeProfits.map((tp, i) => (
-                    <Badge key={i} variant="outline" className="text-xs">
-                      ${formatNumber(tp.price)}
-                    </Badge>
-                  ))}
-                </div>
-              </div>
-            </div>
-            {signal.stopLoss && (
-              <div className="mt-2 text-xs">
-                <span className="text-muted-foreground">SL:</span>{" "}
-                <span className="text-red-500">${formatNumber(signal.stopLoss)}</span>
-              </div>
-            )}
             <div className="flex gap-2 mt-3">
               <Button
                 size="sm"
                 className="flex-1 h-8"
                 onClick={() => handleExecuteSignal(signal)}
+                disabled={isLoading}
               >
                 <Zap className="h-3 w-3 mr-1" />
                 Execute
@@ -238,62 +352,6 @@ export function ChatBot() {
             </div>
           </div>
         )}
-
-        {/* External Position with Escort buttons */}
-        {externalPos && (
-          <div className="mt-2 rounded-lg border border-blue-500/30 bg-blue-500/5 p-3 text-left">
-            <div className="flex items-center gap-2 mb-2">
-              <ExternalLink className="h-4 w-4 text-blue-500" />
-              <span className="text-sm font-medium text-blue-600 dark:text-blue-400">
-                External Position
-              </span>
-            </div>
-            <div className="flex items-center gap-2 mb-2">
-              <Badge
-                variant="outline"
-                className={cn(
-                  "text-xs",
-                  externalPos.direction === "LONG"
-                    ? "bg-green-500/10 text-green-500 border-green-500/20"
-                    : "bg-red-500/10 text-red-500 border-red-500/20"
-                )}
-              >
-                {externalPos.direction === "LONG" ? (
-                  <TrendingUp className="h-3 w-3 mr-1" />
-                ) : (
-                  <TrendingDown className="h-3 w-3 mr-1" />
-                )}
-                {externalPos.direction}
-              </Badge>
-              <span className="font-medium text-sm">{externalPos.symbol}</span>
-              <Badge variant="secondary" className="text-xs">
-                {externalPos.leverage}x
-              </Badge>
-            </div>
-            <div className="text-xs space-y-1 text-muted-foreground">
-              <div>Exchange: {externalPos.exchangeName}</div>
-              <div>Entry: ${formatNumber(externalPos.avgEntryPrice)}</div>
-              <div>Amount: {externalPos.amount.toFixed(6)} (${formatNumber(externalPos.amountUsd)})</div>
-            </div>
-            <div className="flex gap-2 mt-3">
-              <Button
-                size="sm"
-                className="flex-1 h-8 bg-green-500 hover:bg-green-600 text-white"
-                onClick={() => handleEscortPosition(externalPos.id, "accept")}
-              >
-                ✅ Escort
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                className="flex-1 h-8 text-red-500 border-red-500/30 hover:bg-red-500/10"
-                onClick={() => handleEscortPosition(externalPos.id, "ignore")}
-              >
-                🚫 Ignore
-              </Button>
-            </div>
-          </div>
-        )}
       </>
     );
   };
@@ -308,37 +366,27 @@ export function ChatBot() {
               <span
                 className={cn(
                   "absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full",
-                  isConnected ? "bg-green-500" : "bg-red-500"
+                  isConnected ? "bg-green-500" : "bg-yellow-500"
                 )}
               />
             </div>
             Oracle
-            <span className="text-xs font-normal text-muted-foreground">(AI-Signals)</span>
+            <span className="text-xs font-normal text-muted-foreground">(DEMO)</span>
           </CardTitle>
           <div className="flex items-center gap-2">
             <Badge variant="outline" className="text-xs">
               <Sparkles className="h-3 w-3 mr-1" />
-              GPT-4
+              AI
             </Badge>
             <Badge
               className={cn(
                 "text-xs",
-                isConnected
+                mode === "DEMO"
                   ? "bg-green-500/10 text-green-500 border-green-500/20"
-                  : "bg-red-500/10 text-red-500 border-red-500/20"
+                  : "bg-orange-500/10 text-orange-500 border-orange-500/20"
               )}
             >
-              {isConnected ? (
-                <>
-                  <Wifi className="h-3 w-3 mr-1" />
-                  WebSocket
-                </>
-              ) : (
-                <>
-                  <WifiOff className="h-3 w-3 mr-1" />
-                  Offline
-                </>
-              )}
+              {mode}
             </Badge>
           </div>
         </div>
@@ -370,7 +418,7 @@ export function ChatBot() {
                       ) : message.role === "system" ? (
                         <AlertCircle className="h-4 w-4" />
                       ) : message.role === "notification" ? (
-                        getNotificationIcon(message.type)
+                        <Bell className="h-4 w-4" />
                       ) : (
                         <User className="h-4 w-4" />
                       )}
@@ -398,6 +446,22 @@ export function ChatBot() {
                   </div>
                 </div>
               ))}
+
+              {isLoading && (
+                <div className="flex gap-3">
+                  <Avatar className="h-8 w-8">
+                    <AvatarFallback className="bg-primary/20 text-primary">
+                      <Bot className="h-4 w-4" />
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="rounded-2xl rounded-tl-sm bg-secondary px-4 py-2.5">
+                    <div className="flex items-center gap-2">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <span className="text-xs text-muted-foreground">Processing...</span>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -406,20 +470,13 @@ export function ChatBot() {
           <div className="flex items-center gap-2 mb-2">
             <Building2 className="h-3 w-3 text-muted-foreground" />
             <Select value={selectedExchange} onValueChange={setSelectedExchange}>
-              <SelectTrigger className="h-7 text-xs w-[180px]">
+              <SelectTrigger className="h-7 text-xs w-[140px]">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
                 {EXCHANGES.map((ex) => (
                   <SelectItem key={ex.id} value={ex.id}>
-                    <span className="flex items-center gap-1">
-                      {ex.name}
-                      {ex.hasDemo && (
-                        <Badge variant="outline" className="text-[9px] h-3 px-1">
-                          Demo
-                        </Badge>
-                      )}
-                    </span>
+                    {ex.name}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -433,12 +490,6 @@ export function ChatBot() {
                 <SelectItem value="REAL">REAL</SelectItem>
               </SelectContent>
             </Select>
-            {isConnected && (
-              <Badge variant="outline" className="text-xs text-green-500">
-                <BellRing className="h-3 w-3 mr-1" />
-                Live
-              </Badge>
-            )}
           </div>
           <form
             onSubmit={(e) => {
@@ -450,11 +501,12 @@ export function ChatBot() {
             <Input
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              placeholder="Signal or command (help, long, short, close all...)"
+              placeholder="Signal or command (help, positions, close all...)"
               className="flex-1"
+              disabled={isLoading}
               autoFocus
             />
-            <Button type="submit" size="icon" disabled={!input.trim()}>
+            <Button type="submit" size="icon" disabled={isLoading || !input.trim()}>
               <Send className="h-4 w-4" />
             </Button>
           </form>
@@ -462,20 +514,15 @@ export function ChatBot() {
             <Button variant="ghost" size="sm" className="h-6 text-xs px-2 text-primary" onClick={() => setInput("help")}>
               📖 help
             </Button>
-            <Button variant="ghost" size="sm" className="h-6 text-xs px-2" onClick={() => setInput("long")}>
-              📈 long
-            </Button>
-            <Button variant="ghost" size="sm" className="h-6 text-xs px-2" onClick={() => setInput("short")}>
-              📉 short
-            </Button>
             <Button variant="ghost" size="sm" className="h-6 text-xs px-2" onClick={() => setInput("positions")}>
               📊 positions
             </Button>
             <Button
               variant="ghost"
               size="sm"
-              className="h-6 text-xs px-2 text-blue-500 hover:text-blue-600"
+              className="h-6 text-xs px-2 text-blue-500"
               onClick={handleSyncPositions}
+              disabled={isLoading}
             >
               <RefreshCw className="h-3 w-3 mr-1" />
               Sync
@@ -483,8 +530,9 @@ export function ChatBot() {
             <Button
               variant="ghost"
               size="sm"
-              className="h-6 text-xs px-2 text-red-500 hover:text-red-600"
-              onClick={() => setInput("close all")}
+              className="h-6 text-xs px-2 text-red-500"
+              onClick={handleCloseAll}
+              disabled={isLoading}
             >
               🚫 close all
             </Button>
