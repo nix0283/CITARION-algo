@@ -567,6 +567,9 @@ Contributions are welcome! Please read our contributing guidelines before submit
 - ✅ 6 Bot Templates: DCA, BB, ORION, LOGOS, GRID, MFT
 - ✅ Dynamic Mutation Rates by Volatility Regime
 - ✅ Fitness Penalty for Unstable Market Conditions
+- ✅ **Bot Integration**: DCA, BB, GRID → Database tables
+- ✅ **Database Persistence**: GAOptimizationJob model
+- ✅ **UI Warning**: Bot must exist before optimization
 
 ### GARCH Volatility Integration
 - ✅ GARCH Integration Service for Trading Bots

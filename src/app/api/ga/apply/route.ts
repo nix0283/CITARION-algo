@@ -25,7 +25,7 @@ export async function POST(request: NextRequest) {
     
     // If botCode is provided, find latest completed job for that bot
     if (botCode && !jobId) {
-      const jobs = gaService.getAllJobs();
+      const jobs = await gaService.getAllJobs();
       const botJobs = jobs.filter(
         j => j.botCode === botCode && j.status === 'completed' && j.bestChromosome
       );
@@ -81,7 +81,7 @@ export async function GET(request: NextRequest) {
     }
     
     const gaService = getGAService();
-    const jobs = gaService.getAllJobs();
+    const jobs = await gaService.getAllJobs();
     
     const botJobs = jobs.filter(
       j => j.botCode === botCode && j.status === 'completed' && j.bestChromosome
@@ -114,6 +114,7 @@ export async function GET(request: NextRequest) {
       params,
       completedAt: latestJob.completedAt,
       volatilityRegime: latestJob.volatilityRegime,
+      gaGarchConfig: latestJob.gaGarchConfig,
       message: `Latest optimization from ${new Date(latestJob.completedAt!).toISOString()}`,
     });
     

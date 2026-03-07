@@ -2523,3 +2523,56 @@ model ExchangeConnectionStatus {
   @@index([exchangeId])
   @@index([status])
 }
+
+// ==================== GENETIC ALGORITHM OPTIMIZATION ====================
+// Persists GA optimization jobs for trading bot parameter optimization
+
+model GAOptimizationJob {
+  id String @id @default(cuid())
+
+  // Job identification
+  jobId     String @unique // botCode-timestamp format
+  botCode   String
+  botType   String // DCA, BB, ORION, LOGOS, GRID, MFT
+  symbol    String
+
+  // Status
+  status    String @default("pending") // pending, running, paused, completed, failed, cancelled
+
+  // Configuration (JSON)
+  config    String // JSON: GeneticConfig
+  geneTemplate String // JSON: Gene[]
+  constraints  String // JSON: Constraint[]
+
+  // Progress
+  generation    Int @default(0)
+  progress      Float @default(0)
+  currentStats  String? // JSON: PopulationStats
+
+  // Best result (JSON)
+  bestChromosome String? // JSON: Chromosome
+
+  // History (JSON array, limited to last 50 generations)
+  history String @default("[]") // JSON: PopulationStats[]
+
+  // Timing
+  startedAt   DateTime?
+  completedAt DateTime?
+  durationMs  Int @default(0)
+
+  // Result (JSON)
+  result String? // JSON: OptimizationResult
+  error  String?
+
+  // GARCH integration
+  volatilityRegime    String? // low, normal, high, extreme
+  volatilityAdjustments String? // JSON: VolatilityAdjustments
+  gaGarchConfig       String? // JSON: gaGarchConfig
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([botCode, status])
+  @@index([status, createdAt])
+  @@index([botType, symbol])
+}

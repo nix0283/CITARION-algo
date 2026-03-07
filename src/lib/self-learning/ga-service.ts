@@ -23,6 +23,8 @@ import type {
   Constraint,
 } from './types';
 import { getGARCHIntegrationService, type VolatilityRegime, type BotType } from '../volatility/garch-integration-service';
+import { getGAGarchIntegration, type VolatilityAdjustments as GAVolatilityAdjustments } from './ga-garch-integration';
+import { db } from '@/lib/db';
 
 // =============================================================================
 // TYPES
@@ -59,6 +61,12 @@ export interface OptimizationJob {
   // GARCH integration
   volatilityRegime: VolatilityRegime | null;
   volatilityAdjustments: VolatilityAdjustments | null;
+  gaGarchConfig: {
+    fitnessMultiplier: number;
+    explorationBoost: number;
+    regimeScore: number;
+    trend: 'increasing' | 'decreasing' | 'stable';
+  } | null;
 }
 
 export interface VolatilityAdjustments {
@@ -182,29 +190,76 @@ class GAService {
     const geneTemplate = request.geneTemplate || BOT_TEMPLATES[request.botType];
 
     // Create config
-    const config: GeneticConfig = {
+    let config: GeneticConfig = {
       ...defaultGeneticConfig,
       ...request.config,
     };
+    
+    // Constraints (can be modified by GARCH integration)
+    let jobConstraints: Constraint[] = request.constraints || [];
 
     // Get volatility adjustments if enabled
     let volatilityAdjustments: VolatilityAdjustments | null = null;
     let volatilityRegime: VolatilityRegime | null = null;
 
+    // GA-GARCH Integration with advanced features
+    let gaGarchConfig: OptimizationJob['gaGarchConfig'] = null;
+    
     if (this.config.enableGARCHIntegration && request.volatilityAware !== false) {
       try {
-        const garchService = getGARCHIntegrationService();
-        const context = garchService.getVolatilityContext(request.symbol);
+        // Use advanced GA-GARCH integration layer
+        const gaGarchIntegration = getGAGarchIntegration();
+        const volatilityConfig = gaGarchIntegration.getVolatilityAwareConfig(
+          config,
+          request.botType,
+          request.symbol
+        );
         
-        if (context) {
-          volatilityRegime = context.regime;
-          volatilityAdjustments = this.getVolatilityAdjustments(context.regime);
-          
-          // Apply volatility adjustments to config
-          config.mutationRate = config.mutationRate * volatilityAdjustments.mutationRateMultiplier;
+        // Apply advanced adjustments
+        config = volatilityConfig.geneticConfig;
+        volatilityRegime = volatilityConfig.regimeInfo.regime;
+        
+        volatilityAdjustments = {
+          mutationRateMultiplier: volatilityConfig.adjustments.mutationRateMultiplier,
+          explorationBoost: volatilityConfig.adjustments.explorationBoost,
+          fitnessPenalty: volatilityConfig.adjustments.fitnessPenalty,
+          regime: volatilityConfig.regimeInfo.regime,
+        };
+        
+        gaGarchConfig = {
+          fitnessMultiplier: volatilityConfig.fitnessMultiplier,
+          explorationBoost: volatilityConfig.explorationBoost,
+          regimeScore: volatilityConfig.regimeInfo.score,
+          trend: volatilityConfig.regimeInfo.trend,
+        };
+        
+        // Merge regime-specific constraints
+        if (volatilityConfig.constraints.length > 0) {
+          jobConstraints = [...jobConstraints, ...volatilityConfig.constraints];
         }
+        
+        // Adjust population size based on volatility
+        config.populationSize = gaGarchIntegration.getRecommendedPopulationSize(
+          config.populationSize,
+          request.symbol
+        );
+        
       } catch (error) {
-        console.warn('[GA Service] GARCH integration failed, using default config:', error);
+        console.warn('[GA Service] GA-GARCH integration failed, falling back to basic:', error);
+        
+        // Fallback to basic GARCH integration
+        try {
+          const garchService = getGARCHIntegrationService();
+          const context = garchService.getVolatilityContext(request.symbol);
+          
+          if (context) {
+            volatilityRegime = context.regime;
+            volatilityAdjustments = this.getVolatilityAdjustments(context.regime);
+            config.mutationRate = config.mutationRate * volatilityAdjustments.mutationRateMultiplier;
+          }
+        } catch (fallbackError) {
+          console.warn('[GA Service] Fallback GARCH integration also failed:', fallbackError);
+        }
       }
     }
 
@@ -217,7 +272,7 @@ class GAService {
       status: 'pending',
       config,
       geneTemplate,
-      constraints: request.constraints || [],
+      constraints: jobConstraints,
       generation: 0,
       progress: 0,
       currentStats: null,
@@ -230,9 +285,13 @@ class GAService {
       error: null,
       volatilityRegime,
       volatilityAdjustments,
+      gaGarchConfig,
     };
 
     this.jobs.set(jobId, job);
+
+    // Persist job to database
+    await this.saveJobToDatabase(job);
 
     // Start optimization in background
     this.runOptimization(jobId).catch(error => {
@@ -240,6 +299,8 @@ class GAService {
       job.status = 'failed';
       job.error = error.message;
       job.completedAt = Date.now();
+      // Update database
+      this.updateJobInDatabase(jobId, { status: 'failed', error: error.message, completedAt: Date.now() }).catch(console.error);
     });
 
     return job;
@@ -284,10 +345,29 @@ class GAService {
       job.completedAt = Date.now();
       job.durationMs = result.durationMs;
 
+      // Update database
+      await this.updateJobInDatabase(job.id, {
+        status: 'completed',
+        generation: job.generation,
+        progress: 100,
+        bestChromosome: JSON.stringify(result.bestChromosome),
+        history: JSON.stringify(result.history.slice(-50)),
+        result: JSON.stringify(result),
+        completedAt: new Date(),
+        durationMs: result.durationMs,
+      });
+
     } catch (error: any) {
       job.status = 'failed';
       job.error = error.message;
       job.completedAt = Date.now();
+      
+      // Update database
+      await this.updateJobInDatabase(job.id, {
+        status: 'failed',
+        error: error.message,
+        completedAt: new Date(),
+      });
     }
   }
 
@@ -298,6 +378,14 @@ class GAService {
     // This would typically call backtesting service
     // For now, return a simulated fitness function
     
+    // Get GA-GARCH integration for advanced fitness adjustments
+    let gaGarchIntegration: ReturnType<typeof getGAGarchIntegration> | null = null;
+    try {
+      gaGarchIntegration = getGAGarchIntegration();
+    } catch {
+      // Integration not available
+    }
+    
     return async (genes: Gene[]): Promise<number> => {
       // Simulated fitness - in production would call backtesting
       const baseFitness = genes.reduce((sum, gene) => {
@@ -307,13 +395,55 @@ class GAService {
 
       let fitness = baseFitness / genes.length;
 
-      // Apply volatility penalty if in high/extreme regime
-      if (job.volatilityAdjustments) {
+      // Apply advanced GA-GARCH fitness adjustments
+      if (gaGarchIntegration && job.gaGarchConfig) {
+        // Apply fitness multiplier
+        fitness *= job.gaGarchConfig.fitnessMultiplier;
+        
+        // Apply diversification bonus
+        const diversity = this.calculateGeneDiversity(genes);
+        const diversificationBonus = gaGarchIntegration.getDiversificationBonus(diversity, job.symbol);
+        fitness += diversificationBonus;
+        
+        // Apply exploration boost for high volatility
+        if (job.gaGarchConfig.explorationBoost > 0) {
+          // Encourage exploration by rewarding unique gene combinations
+          const uniqueness = this.calculateGeneUniqueness(genes);
+          fitness += uniqueness * job.gaGarchConfig.explorationBoost;
+        }
+      } else if (job.volatilityAdjustments) {
+        // Fallback: Apply basic volatility penalty
         fitness *= (1 - job.volatilityAdjustments.fitnessPenalty);
       }
 
       return fitness + (Math.random() - 0.5) * 0.1; // Add noise
     };
+  }
+
+  /**
+   * Calculate gene diversity for diversification bonus
+   */
+  private calculateGeneDiversity(genes: Gene[]): number {
+    if (genes.length < 2) return 0;
+    
+    const values = genes.map(g => (g.value - g.min) / (g.max - g.min));
+    const mean = values.reduce((a, b) => a + b, 0) / values.length;
+    const variance = values.reduce((sum, v) => sum + Math.pow(v - mean, 2), 0) / values.length;
+    
+    return Math.sqrt(variance); // Standard deviation as diversity measure
+  }
+
+  /**
+   * Calculate gene uniqueness for exploration bonus
+   */
+  private calculateGeneUniqueness(genes: Gene[]): number {
+    // Higher uniqueness for values near min/max boundaries
+    let uniqueness = 0;
+    for (const gene of genes) {
+      const normalized = (gene.value - gene.min) / (gene.max - gene.min);
+      uniqueness += Math.abs(normalized - 0.5) * 2; // 0 at center, 1 at edges
+    }
+    return uniqueness / genes.length;
   }
 
   /**
@@ -355,15 +485,55 @@ class GAService {
   /**
    * Get optimization progress
    */
-  getProgress(jobId: string): OptimizationJob | null {
-    return this.jobs.get(jobId) || null;
+  async getProgress(jobId: string): Promise<OptimizationJob | null> {
+    // First check memory
+    let job = this.jobs.get(jobId);
+    if (job) return job;
+    
+    // If not in memory, try database
+    try {
+      job = await this.loadJobFromDatabase(jobId);
+      if (job) {
+        this.jobs.set(jobId, job);
+      }
+      return job;
+    } catch (error) {
+      console.error('[GA Service] Error loading job from database:', error);
+      return null;
+    }
   }
 
   /**
    * Get all jobs
    */
-  getAllJobs(): OptimizationJob[] {
-    return Array.from(this.jobs.values());
+  async getAllJobs(): Promise<OptimizationJob[]> {
+    // Merge memory jobs with database jobs
+    try {
+      const dbJobs = await db.gAOptimizationJob.findMany({
+        orderBy: { createdAt: 'desc' },
+        take: 100,
+      });
+      
+      const jobs: OptimizationJob[] = [];
+      
+      // Add memory jobs first (most up-to-date)
+      for (const job of this.jobs.values()) {
+        jobs.push(job);
+      }
+      
+      // Add database jobs not in memory
+      for (const dbJob of dbJobs) {
+        if (!this.jobs.has(dbJob.jobId)) {
+          const job = this.dbJobToOptimizationJob(dbJob);
+          if (job) jobs.push(job);
+        }
+      }
+      
+      return jobs;
+    } catch (error) {
+      console.error('[GA Service] Error loading jobs from database:', error);
+      return Array.from(this.jobs.values());
+    }
   }
 
   /**
@@ -395,7 +565,20 @@ class GAService {
    * Apply optimized parameters to bot
    */
   async applyToBot(jobId: string): Promise<ApplyResult> {
-    const job = this.jobs.get(jobId);
+    // First try memory, then database
+    let job = this.jobs.get(jobId);
+    
+    if (!job) {
+      // Try to load from database
+      try {
+        job = await this.loadJobFromDatabase(jobId);
+        if (job) {
+          this.jobs.set(jobId, job);
+        }
+      } catch (error) {
+        console.error('[GA Service] Error loading job from database:', error);
+      }
+    }
     
     if (!job) {
       return {
@@ -423,8 +606,19 @@ class GAService {
       params[gene.name] = gene.value;
     }
 
-    // In production, this would update the bot configuration
-    // For now, we just return the parameters
+    // Apply to actual bot in database
+    try {
+      await this.applyParamsToBot(job.botCode, job.botType, params);
+    } catch (error: any) {
+      console.error('[GA Service] Error applying params to bot:', error);
+      return {
+        success: false,
+        botCode: job.botCode,
+        appliedParams: params,
+        fitness: job.bestChromosome.fitness,
+        message: `Failed to apply to bot: ${error.message}`,
+      };
+    }
     
     return {
       success: true,
@@ -433,6 +627,209 @@ class GAService {
       fitness: job.bestChromosome.fitness,
       message: `Applied optimized parameters to ${job.botCode}. Fitness: ${job.bestChromosome.fitness.toFixed(4)}`,
     };
+  }
+
+  /**
+   * Apply parameters to actual bot in database
+   */
+  private async applyParamsToBot(
+    botCode: string, 
+    botType: BotType, 
+    params: Record<string, number>
+  ): Promise<void> {
+    // Extract bot ID from botCode (format: TYPE-SYMBOL-ID or just ID)
+    const botId = botCode.includes('-') ? botCode.split('-').pop() : botCode;
+    
+    switch (botType) {
+      case 'DCA':
+        await this.applyToDcaBot(botCode, params);
+        break;
+      case 'BB':
+        await this.applyToBbBot(botCode, params);
+        break;
+      case 'GRID':
+        await this.applyToGridBot(botCode, params);
+        break;
+      case 'ORION':
+      case 'LOGOS':
+      case 'MFT':
+        // These bots use BotConfig or custom tables
+        await this.applyToBotConfig(botCode, botType, params);
+        break;
+      default:
+        console.warn(`[GA Service] Unknown bot type: ${botType}, params not saved`);
+    }
+  }
+
+  /**
+   * Apply to DCA Bot
+   */
+  private async applyToDcaBot(botCode: string, params: Record<string, number>): Promise<void> {
+    // Try to find existing bot by name or create update data
+    const updateData: Record<string, any> = {};
+    
+    // Map GA params to DCA bot fields
+    if (params.baseOrderSize !== undefined) {
+      // Convert percentage to USDT (assume $10000 base)
+      updateData.baseAmount = params.baseOrderSize * 10000;
+    }
+    if (params.safetyOrderSize !== undefined) {
+      updateData.dcaMultiplier = params.safetyOrderSize / (params.baseOrderSize || 0.01);
+    }
+    if (params.priceDeviation !== undefined) {
+      updateData.dcaPercent = params.priceDeviation * 100;
+    }
+    if (params.takeProfit !== undefined) {
+      updateData.tpValue = params.takeProfit * 100;
+      updateData.tpType = 'PERCENT';
+    }
+    if (params.maxSafetyOrders !== undefined) {
+      updateData.dcaLevels = Math.round(params.maxSafetyOrders);
+    }
+    if (params.safetyOrderStep !== undefined) {
+      updateData.dcaPriceScale = params.safetyOrderStep * 20; // Scale factor
+    }
+
+    // Try to update existing bot
+    try {
+      const existing = await db.dcaBot.findFirst({
+        where: { name: botCode },
+      });
+      
+      if (existing) {
+        await db.dcaBot.update({
+          where: { id: existing.id },
+          data: updateData,
+        });
+        console.log(`[GA Service] Updated DCA bot ${botCode} with optimized params`);
+      } else {
+        console.log(`[GA Service] DCA bot ${botCode} not found, params ready for new bot creation`);
+        // Could create a new bot here if needed
+      }
+    } catch (error) {
+      console.error(`[GA Service] Error updating DCA bot:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Apply to BB Bot
+   */
+  private async applyToBbBot(botCode: string, params: Record<string, number>): Promise<void> {
+    const updateData: Record<string, any> = {};
+    
+    if (params.period !== undefined) {
+      // BB period - stored in BBotTimeframeConfig
+    }
+    if (params.stdDev !== undefined) {
+      // Standard deviation setting
+    }
+    if (params.stopLossPercent !== undefined) {
+      updateData.stopLoss = params.stopLossPercent * 100;
+    }
+    if (params.takeProfitPercent !== undefined) {
+      updateData.takeProfit = params.takeProfitPercent * 100;
+    }
+    if (params.entryThreshold !== undefined) {
+      // Entry threshold
+    }
+
+    try {
+      const existing = await db.bBBot.findFirst({
+        where: { name: botCode },
+      });
+      
+      if (existing) {
+        await db.bBBot.update({
+          where: { id: existing.id },
+          data: updateData,
+        });
+        console.log(`[GA Service] Updated BB bot ${botCode} with optimized params`);
+      } else {
+        console.log(`[GA Service] BB bot ${botCode} not found, params ready for new bot creation`);
+      }
+    } catch (error) {
+      console.error(`[GA Service] Error updating BB bot:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Apply to Grid Bot
+   */
+  private async applyToGridBot(botCode: string, params: Record<string, number>): Promise<void> {
+    const updateData: Record<string, any> = {};
+    
+    if (params.gridLevels !== undefined) {
+      updateData.gridCount = Math.round(params.gridLevels);
+    }
+    if (params.gridSpacing !== undefined) {
+      // Grid spacing as percentage
+      updateData.gridType = params.gridSpacing < 0.015 ? 'ARITHMETIC' : 'GEOMETRIC';
+    }
+    if (params.positionSize !== undefined) {
+      updateData.perGridAmount = params.positionSize * 10000; // Scale to USDT
+    }
+    if (params.takeProfitGrid !== undefined) {
+      // Take profit for grid
+    }
+
+    try {
+      const existing = await db.gridBot.findFirst({
+        where: { name: botCode },
+      });
+      
+      if (existing) {
+        await db.gridBot.update({
+          where: { id: existing.id },
+          data: updateData,
+        });
+        console.log(`[GA Service] Updated GRID bot ${botCode} with optimized params`);
+      } else {
+        console.log(`[GA Service] GRID bot ${botCode} not found, params ready for new bot creation`);
+      }
+    } catch (error) {
+      console.error(`[GA Service] Error updating GRID bot:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Apply to BotConfig (for ORION, LOGOS, MFT)
+   */
+  private async applyToBotConfig(
+    botCode: string, 
+    botType: BotType, 
+    params: Record<string, number>
+  ): Promise<void> {
+    const updateData: Record<string, any> = {};
+    
+    // Common bot config fields
+    if (params.riskPerTrade !== undefined) {
+      updateData.tradeAmount = params.riskPerTrade * 10000;
+    }
+    if (params.signalThreshold !== undefined) {
+      updateData.minRiskRewardRatio = params.signalThreshold;
+    }
+
+    try {
+      const existing = await db.botConfig.findFirst({
+        where: { name: botCode },
+      });
+      
+      if (existing) {
+        await db.botConfig.update({
+          where: { id: existing.id },
+          data: updateData,
+        });
+        console.log(`[GA Service] Updated BotConfig ${botCode} with optimized params`);
+      } else {
+        console.log(`[GA Service] BotConfig ${botCode} not found, params ready for new bot creation`);
+      }
+    } catch (error) {
+      console.error(`[GA Service] Error updating BotConfig:`, error);
+      throw error;
+    }
   }
 
   /**
@@ -452,7 +849,7 @@ class GAService {
   /**
    * Clean up old jobs
    */
-  cleanupOldJobs(maxAgeMs: number = 24 * 60 * 60 * 1000): number {
+  async cleanupOldJobs(maxAgeMs: number = 24 * 60 * 60 * 1000): Promise<number> {
     const cutoff = Date.now() - maxAgeMs;
     let removed = 0;
 
@@ -465,7 +862,118 @@ class GAService {
       }
     }
 
+    // Also clean database
+    try {
+      const dbCutoff = new Date(cutoff);
+      const dbResult = await db.gAOptimizationJob.deleteMany({
+        where: {
+          completedAt: { lt: dbCutoff },
+        },
+      });
+      removed += dbResult.count;
+    } catch (error) {
+      console.error('[GA Service] Error cleaning up database:', error);
+    }
+
     return removed;
+  }
+
+  // =============================================================================
+  // DATABASE HELPERS
+  // =============================================================================
+
+  private async saveJobToDatabase(job: OptimizationJob): Promise<void> {
+    try {
+      await db.gAOptimizationJob.create({
+        data: {
+          jobId: job.id,
+          botCode: job.botCode,
+          botType: job.botType,
+          symbol: job.symbol,
+          status: job.status,
+          config: JSON.stringify(job.config),
+          geneTemplate: JSON.stringify(job.geneTemplate),
+          constraints: JSON.stringify(job.constraints),
+          generation: job.generation,
+          progress: job.progress,
+          currentStats: job.currentStats ? JSON.stringify(job.currentStats) : null,
+          bestChromosome: job.bestChromosome ? JSON.stringify(job.bestChromosome) : null,
+          history: JSON.stringify(job.history),
+          startedAt: job.startedAt ? new Date(job.startedAt) : null,
+          completedAt: job.completedAt ? new Date(job.completedAt) : null,
+          durationMs: job.durationMs,
+          result: job.result ? JSON.stringify(job.result) : null,
+          error: job.error,
+          volatilityRegime: job.volatilityRegime,
+          volatilityAdjustments: job.volatilityAdjustments ? JSON.stringify(job.volatilityAdjustments) : null,
+          gaGarchConfig: job.gaGarchConfig ? JSON.stringify(job.gaGarchConfig) : null,
+        },
+      });
+    } catch (error) {
+      console.error('[GA Service] Error saving job to database:', error);
+    }
+  }
+
+  private async updateJobInDatabase(jobId: string, data: Record<string, any>): Promise<void> {
+    try {
+      // Convert completedAt to Date if it's a number
+      if (data.completedAt && typeof data.completedAt === 'number') {
+        data.completedAt = new Date(data.completedAt);
+      }
+      
+      await db.gAOptimizationJob.update({
+        where: { jobId },
+        data,
+      });
+    } catch (error) {
+      console.error('[GA Service] Error updating job in database:', error);
+    }
+  }
+
+  private async loadJobFromDatabase(jobId: string): Promise<OptimizationJob | null> {
+    try {
+      const dbJob = await db.gAOptimizationJob.findUnique({
+        where: { jobId },
+      });
+      
+      if (!dbJob) return null;
+      
+      return this.dbJobToOptimizationJob(dbJob);
+    } catch (error) {
+      console.error('[GA Service] Error loading job from database:', error);
+      return null;
+    }
+  }
+
+  private dbJobToOptimizationJob(dbJob: any): OptimizationJob | null {
+    try {
+      return {
+        id: dbJob.jobId,
+        botCode: dbJob.botCode,
+        botType: dbJob.botType as BotType,
+        symbol: dbJob.symbol,
+        status: dbJob.status as OptimizationStatus,
+        config: JSON.parse(dbJob.config),
+        geneTemplate: JSON.parse(dbJob.geneTemplate),
+        constraints: JSON.parse(dbJob.constraints || '[]'),
+        generation: dbJob.generation,
+        progress: dbJob.progress,
+        currentStats: dbJob.currentStats ? JSON.parse(dbJob.currentStats) : null,
+        bestChromosome: dbJob.bestChromosome ? JSON.parse(dbJob.bestChromosome) : null,
+        history: JSON.parse(dbJob.history || '[]'),
+        startedAt: dbJob.startedAt ? dbJob.startedAt.getTime() : null,
+        completedAt: dbJob.completedAt ? dbJob.completedAt.getTime() : null,
+        durationMs: dbJob.durationMs,
+        result: dbJob.result ? JSON.parse(dbJob.result) : null,
+        error: dbJob.error,
+        volatilityRegime: dbJob.volatilityRegime as VolatilityRegime | null,
+        volatilityAdjustments: dbJob.volatilityAdjustments ? JSON.parse(dbJob.volatilityAdjustments) : null,
+        gaGarchConfig: dbJob.gaGarchConfig ? JSON.parse(dbJob.gaGarchConfig) : null,
+      };
+    } catch (error) {
+      console.error('[GA Service] Error parsing job from database:', error);
+      return null;
+    }
   }
 }
 

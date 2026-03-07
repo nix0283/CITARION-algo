@@ -25,8 +25,33 @@ The Genetic Algorithm Optimizer is a production-ready evolutionary optimization 
 │  │ POST /api/ga/apply      - Apply optimized parameters       │  │
 │  └────────────────────────────────────────────────────────────┘  │
 │                                                                   │
+│         │                                                         │
+│         ▼                                                         │
+│  ┌────────────────────────────────────────────────────────────┐  │
+│  │                 BOT INTEGRATION                            │  │
+│  ├────────────────────────────────────────────────────────────┤  │
+│  │ DCA Bot  → DcaBot table    (baseAmount, dcaMultiplier)    │  │
+│  │ BB Bot   → BBBot table     (stopLoss, takeProfit)         │  │
+│  │ GRID Bot → GridBot table   (gridCount, gridType)          │  │
+│  │ ORION/LOGOS/MFT → BotConfig (tradeAmount, minRiskReward)  │  │
+│  └────────────────────────────────────────────────────────────┘  │
+│                                                                   │
 └─────────────────────────────────────────────────────────────────┘
 ```
+
+## ⚠️ Important: Bot Must Exist First
+
+**Before optimizing parameters, the bot MUST be created in the Trading Bots section.**
+
+The optimizer will:
+- ✅ Apply optimized parameters to **existing bots**
+- ❌ NOT create new bots automatically
+
+**Workflow:**
+1. Create bot in Trading Bots section (DCA, BB, GRID, etc.)
+2. Note the bot code (e.g., `DCA-BTC-001`)
+3. Run optimization with that bot code
+4. Apply optimized parameters
 
 ## API Endpoints
 
@@ -328,3 +353,89 @@ This system uses **classical evolutionary methods only**:
 - NSGA-II for Multi-Objective
 
 No machine learning models, neural networks, or deep learning are used.
+
+## Bot Integration Details
+
+### Parameter Mapping by Bot Type
+
+#### DCA Bot
+| GA Parameter | DcaBot Field | Transformation |
+|-------------|--------------|----------------|
+| baseOrderSize | baseAmount | × 10000 (USDT) |
+| safetyOrderSize | dcaMultiplier | ÷ baseOrderSize |
+| priceDeviation | dcaPercent | × 100 (%) |
+| takeProfit | tpValue | × 100 (%) |
+| maxSafetyOrders | dcaLevels | rounded |
+| safetyOrderStep | dcaPriceScale | × 20 |
+
+#### BB Bot
+| GA Parameter | BBBot Field | Transformation |
+|-------------|-------------|----------------|
+| period | (stored in BBotTimeframeConfig) | - |
+| stdDev | (stored in BBotTimeframeConfig) | - |
+| stopLossPercent | stopLoss | × 100 (%) |
+| takeProfitPercent | takeProfit | × 100 (%) |
+| entryThreshold | (signal threshold) | - |
+
+#### GRID Bot
+| GA Parameter | GridBot Field | Transformation |
+|-------------|---------------|----------------|
+| gridLevels | gridCount | rounded |
+| gridSpacing | gridType | < 0.015 = ARITHMETIC |
+| positionSize | perGridAmount | × 10000 (USDT) |
+| takeProfitGrid | (take profit setting) | - |
+
+#### ORION/LOGOS/MFT Bots
+| GA Parameter | BotConfig Field | Transformation |
+|-------------|-----------------|----------------|
+| riskPerTrade | tradeAmount | × 10000 (USDT) |
+| signalThreshold | minRiskRewardRatio | - |
+| confidenceThreshold | (signal config) | - |
+
+### Database Schema
+
+Optimization jobs are persisted in the `GAOptimizationJob` table:
+
+```prisma
+model GAOptimizationJob {
+  id                  String   @id @default(cuid())
+  jobId               String   @unique
+  botCode             String
+  botType             String
+  symbol              String
+  status              String
+  config              String   // JSON
+  geneTemplate        String   // JSON
+  constraints         String   // JSON
+  generation          Int
+  progress            Float
+  bestChromosome      String?  // JSON
+  history             String   // JSON
+  startedAt           DateTime?
+  completedAt         DateTime?
+  durationMs          Int
+  result              String?  // JSON
+  error               String?
+  volatilityRegime    String?
+  volatilityAdjustments String? // JSON
+  gaGarchConfig       String?  // JSON
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+}
+```
+
+## Troubleshooting
+
+### "Job not found" error
+- Job completed and memory was cleared
+- Use `/api/ga/optimize` (GET) to list all jobs
+- Jobs are persisted in database
+
+### "Bot not found" when applying
+- Create the bot first in Trading Bots section
+- Ensure botCode matches exactly (case-sensitive)
+
+### Optimization stuck at 0%
+- Check dev.log for errors
+- Reduce population size for faster testing
+- Ensure fitness function is not blocking

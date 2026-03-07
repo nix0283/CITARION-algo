@@ -59,6 +59,14 @@ export async function POST(request: NextRequest) {
       message: `Optimization started for ${botCode}`,
       volatilityRegime: job.volatilityRegime,
       volatilityAdjustments: job.volatilityAdjustments,
+      gaGarchConfig: job.gaGarchConfig ? {
+        fitnessMultiplier: job.gaGarchConfig.fitnessMultiplier,
+        explorationBoost: job.gaGarchConfig.explorationBoost,
+        regimeScore: job.gaGarchConfig.regimeScore,
+        trend: job.gaGarchConfig.trend,
+      } : null,
+      populationSize: job.config.populationSize,
+      mutationRate: job.config.mutationRate,
     });
     
   } catch (error: any) {
@@ -81,7 +89,7 @@ export async function GET(request: NextRequest) {
     if (status === 'active') {
       jobs = gaService.getActiveJobs();
     } else {
-      jobs = gaService.getAllJobs();
+      jobs = await gaService.getAllJobs();
     }
     
     // Return summary of jobs
@@ -99,6 +107,7 @@ export async function GET(request: NextRequest) {
       durationMs: job.durationMs,
       error: job.error,
       volatilityRegime: job.volatilityRegime,
+      gaGarchConfig: job.gaGarchConfig,
     }));
     
     return NextResponse.json({

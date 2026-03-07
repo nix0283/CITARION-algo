@@ -24,7 +24,7 @@ export async function GET(request: NextRequest) {
     }
     
     const gaService = getGAService();
-    const job = gaService.getProgress(jobId);
+    const job = await gaService.getProgress(jobId);
     
     if (!job) {
       return NextResponse.json(
@@ -95,6 +95,12 @@ export async function GET(request: NextRequest) {
       // Volatility context
       volatilityRegime: job.volatilityRegime,
       volatilityAdjustments: job.volatilityAdjustments,
+      gaGarchConfig: job.gaGarchConfig ? {
+        fitnessMultiplier: job.gaGarchConfig.fitnessMultiplier,
+        explorationBoost: job.gaGarchConfig.explorationBoost,
+        regimeScore: job.gaGarchConfig.regimeScore,
+        trend: job.gaGarchConfig.trend,
+      } : null,
     };
     
     return NextResponse.json(response);
