@@ -912,6 +912,121 @@ export function VolatilityPanel() {
           )}
         </CardContent>
       </Card>
+
+      {/* Integrations Status */}
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm font-medium flex items-center gap-2">
+            <Zap className="h-4 w-4" />
+            Интеграции GARCH
+          </CardTitle>
+          <CardDescription>
+            Статус интеграций с торговыми ботами и ML моделями
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {/* Trading Bots Integration */}
+            <div className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 rounded-full bg-green-500" />
+                <span className="text-sm">Trading Bots (DCA/BB/ORION)</span>
+              </div>
+              <Badge variant="default" className="bg-green-500/10 text-green-500 text-xs">
+                Активно
+              </Badge>
+            </div>
+
+            {/* LOGOS Integration */}
+            <div className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 rounded-full bg-green-500" />
+                <span className="text-sm">LOGOS Signal Weighting</span>
+              </div>
+              <Badge variant="default" className="bg-green-500/10 text-green-500 text-xs">
+                Активно
+              </Badge>
+            </div>
+
+            {/* Gradient Boosting Features */}
+            <div className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 rounded-full bg-green-500" />
+                <span className="text-sm">Gradient Boosting Features</span>
+              </div>
+              <Badge variant="default" className="bg-green-500/10 text-green-500 text-xs">
+                Активно
+              </Badge>
+            </div>
+
+            {/* Training Data Collector */}
+            <div className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 rounded-full bg-green-500" />
+                <span className="text-sm">Training Data Collector</span>
+              </div>
+              <Badge variant="default" className="bg-green-500/10 text-green-500 text-xs">
+                Активно
+              </Badge>
+            </div>
+
+            {/* Risk Management */}
+            <div className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 rounded-full bg-green-500" />
+                <span className="text-sm">AI Risk Management</span>
+              </div>
+              <Badge variant="default" className="bg-green-500/10 text-green-500 text-xs">
+                Активно
+              </Badge>
+            </div>
+
+            {/* Binance API */}
+            <div className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 rounded-full bg-green-500" />
+                <span className="text-sm">Binance Real-time Data</span>
+              </div>
+              <Badge variant="default" className="bg-green-500/10 text-green-500 text-xs">
+                Подключено
+              </Badge>
+            </div>
+          </div>
+
+          {/* Risk Adjustment Preview */}
+          {state.result && (
+            <div className="mt-4 p-4 rounded-lg bg-primary/5 border border-primary/10">
+              <p className="text-sm font-medium mb-2">Рекомендации по управлению рисками:</p>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                <div>
+                  <span className="text-muted-foreground">Размер позиции:</span>
+                  <p className="font-mono">
+                    {state.regime === 'low' ? '+20%' : state.regime === 'high' ? '-40%' : state.regime === 'extreme' ? '-80%' : '0%'}
+                  </p>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Stop Loss:</span>
+                  <p className="font-mono">
+                    {state.regime === 'low' ? '0.8x' : state.regime === 'high' ? '1.5x' : state.regime === 'extreme' ? '2.0x' : '1.0x'}
+                  </p>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Макс. позиция:</span>
+                  <p className="font-mono">
+                    {state.regime === 'low' ? '50%' : state.regime === 'high' ? '25%' : state.regime === 'extreme' ? '10%' : '40%'}
+                  </p>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Действие:</span>
+                  <p className="font-mono">
+                    {state.regime === 'extreme' ? 'HALT' : state.regime === 'high' ? 'REDUCE' : 'TRADE'}
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

@@ -145,8 +145,17 @@ CITARION is a comprehensive algorithmic trading platform designed for institutio
 - **Lawrence Classifier** - k-NN with Lorentzian distance
 - **ML Signal Pipeline** - Signal enhancement and filtering
 - **ML-Enhanced LOGOS** - Weighted signal aggregation
+- **Gradient Boosting Scorer** - Signal quality scoring (18 features)
+- **GARCH Volatility Analysis** - Institutional volatility forecasting
 - **Sentiment Analysis** - Market sentiment from news/social
 - **Self-Learning Bot** - Adaptive strategies
+
+#### GARCH Volatility Integration
+- **Models**: GARCH(1,1), GJR-GARCH, EGARCH
+- **Volatility Regimes**: Low, Normal, High, Extreme
+- **Bot Integration**: DCA, BB, ORION, LOGOS, GRID, MFT
+- **Features**: Position sizing, Stop-loss adjustment, Signal weighting
+- **Real-time Data**: Binance API integration
 
 ---
 
@@ -544,13 +553,22 @@ Contributions are welcome! Please read our contributing guidelines before submit
 
 ## 📋 Recent Updates
 
-### ML Integration Ecosystem (Latest)
+### GARCH Volatility Integration (Latest)
+- ✅ GARCH Integration Service for Trading Bots
+- ✅ LOGOS Signal Weighting by Volatility Regime
+- ✅ Gradient Boosting GARCH Features (9 new features)
+- ✅ Training Data Collector with Outcome Tracking
+- ✅ Real-time Binance Data Integration
+- ✅ Volatility UI Panel with Integration Status
+
+### ML Integration Ecosystem
 - ✅ Lawrence Classifier (k-NN with Lorentzian distance)
 - ✅ ML Bot Integration Service for DCA, BB, ORION, Zenbot
 - ✅ ML-Enhanced LOGOS Engine
 - ✅ ML Filtering Panel with 5 tabs
 - ✅ UI Navigation: ML Filter ↔ LOGOS ↔ Backtesting
 - ✅ Signal Pipeline with quality assessment
+- ✅ Gradient Boosting Signal Scorer (18 features)
 
 ### Exchange Integration
 - ✅ Real API Clients (Binance, Bybit, OKX, Bitget, BingX)
