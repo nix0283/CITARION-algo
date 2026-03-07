@@ -11,7 +11,7 @@
 import { RiskManager, defaultRiskManagerConfig, type RiskReport, type PortfolioData, type PositionRiskData } from './risk-manager';
 import { getGARCHIntegrationService, type GARCHIntegrationService } from '@/lib/volatility/garch-integration-service';
 import { db } from '@/lib/db';
-import { ExchangeClientFactory, type ExchangeClient, type ExchangeOrderConfig } from '@/lib/auto-trading/exchange-clients';
+import { ExchangeClientFactory, type ExchangeClient } from '@/lib/auto-trading/exchange-clients';
 
 // =============================================================================
 // TYPES

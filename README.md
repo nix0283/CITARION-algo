@@ -569,6 +569,9 @@ Contributions are welcome! Please read our contributing guidelines before submit
 - ✅ Real-time Risk Alerts and Notifications
 - ✅ API Endpoints for Risk Data, Bot Status, Kill Switch
 - ✅ UI Dashboard Connected to API/WebSocket
+- ✅ **Kill Switch API**: trigger, arm, disarm, recover endpoints
+- ✅ **Database Integration**: Stops real bots in database
+- ✅ **WebSocket API Integration**: Risk monitor calls main API
 
 ### Genetic Algorithm Optimizer
 - ✅ GA Service for Optimization Job Management

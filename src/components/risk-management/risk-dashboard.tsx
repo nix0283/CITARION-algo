@@ -818,6 +818,13 @@ export function RiskDashboard() {
   const riskScore = report?.riskScore || 0;
   const riskLevel = riskScore >= 70 ? 'CRITICAL' : riskScore >= 50 ? 'HIGH' : riskScore >= 30 ? 'MEDIUM' : 'LOW';
 
+  // Get kill switch state from WebSocket or API report
+  const killSwitch = wsKillSwitch || report?.killSwitch || {
+    isArmed: true,
+    isTriggered: false,
+    botsStopped: 0,
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -831,8 +838,8 @@ export function RiskDashboard() {
         </div>
         <div className="flex items-center gap-2">
           <Radio className={cn("h-4 w-4", isConnected ? "text-green-500" : "text-red-500")} />
-          <Badge 
-            variant="outline" 
+          <Badge
+            variant="outline"
             className={cn(
               "px-4 py-2",
               !killSwitch?.isTriggered && killSwitch?.isArmed

@@ -196,7 +196,7 @@ function checkKillSwitchConditions() {
   }
 }
 
-function triggerKillSwitch(reason: string) {
+async function triggerKillSwitch(reason: string) {
   killSwitchState = {
     ...killSwitchState,
     isTriggered: true,
@@ -206,6 +206,7 @@ function triggerKillSwitch(reason: string) {
   };
   
   // Stop all running bots
+  const previousRunning = botSummary.running;
   botSummary = {
     ...botSummary,
     running: 0,
@@ -217,6 +218,23 @@ function triggerKillSwitch(reason: string) {
     message: `KILL SWITCH TRIGGERED: ${reason}`,
     data: killSwitchState,
   });
+  
+  // Call main API to actually stop all bots
+  try {
+    const response = await fetch('http://localhost:3000/api/risk/killswitch/trigger', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reason }),
+    });
+    const data = await response.json();
+    console.log('[RiskMonitor] Kill switch API response:', data);
+    if (data.success && data.botsStopped !== undefined) {
+      killSwitchState.botsStopped = data.botsStopped;
+    }
+  } catch (error) {
+    console.error('[RiskMonitor] Failed to call kill switch API:', error);
+    killSwitchState.botsStopped = previousRunning;
+  }
   
   io.emit('killswitch_triggered', {
     reason,

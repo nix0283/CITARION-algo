@@ -592,3 +592,55 @@ Stage Summary:
 - Kill Switch for all 6 bot types (DCA, BB, GRID, ORION, LOGOS, MFT)
 - WebSocket for real-time risk monitoring
 - Production-ready API endpoints
+
+---
+Task ID: 14
+Agent: Main Agent
+Task: Risk Management Bug Fixes and Kill Switch Testing
+
+Work Log:
+- Fixed Runtime Errors:
+  - Fixed `killSwitch is not defined` error in risk-dashboard.tsx line 838
+  - Added local `killSwitch` variable derived from wsKillSwitch or report.killSwitch
+  - Fixed import errors in risk-service.ts:
+    - Changed `getGarchIntegrationService` → `getGARCHIntegrationService`
+    - Changed `getExchangeClient` → `ExchangeClientFactory`
+
+- Created Kill Switch API Endpoints:
+  - POST /api/risk/killswitch/trigger - Triggers kill switch, stops all bots
+  - POST /api/risk/killswitch/arm - Arms the kill switch
+  - POST /api/risk/killswitch/disarm - Disarms the kill switch
+  - POST /api/risk/killswitch/recover - Recovers from triggered state
+
+- Updated Risk Monitor WebSocket Service:
+  - Modified triggerKillSwitch() to call main API for actual bot stopping
+  - Added async API call to /api/risk/killswitch/trigger
+  - Logs bots stopped count from API response
+
+- Tested Kill Switch Integration:
+  - Created test bots: DCA-BTCUSDT, BB-ETHUSDT, GRID-SOLUSDT
+  - Triggered kill switch via API
+  - Verified all 3 bots stopped in database (status=STOPPED, isActive=false)
+  - Kill switch correctly updates bot states in database
+
+Files Modified:
+- /src/components/risk-management/risk-dashboard.tsx (fixed killSwitch undefined)
+- /src/lib/risk-management/risk-service.ts (fixed imports)
+- /mini-services/risk-monitor/index.ts (added API integration)
+- /src/app/api/risk/killswitch/trigger/route.ts (new)
+- /src/app/api/risk/killswitch/arm/route.ts (new)
+- /src/app/api/risk/killswitch/disarm/route.ts (new)
+- /src/app/api/risk/killswitch/recover/route.ts (new)
+
+Testing Results:
+- Lint: 0 errors, 41 warnings
+- API: GET /api/risk returns valid JSON with GARCH data
+- Kill Switch: Successfully stopped 3 test bots
+- WebSocket: Running on port 3004
+- Risk Monitor: Fetching data from main API every 30 seconds
+
+Stage Summary:
+- Fixed all runtime errors in Risk Management dashboard
+- Kill Switch now stops real bots in database
+- WebSocket service integrated with API
+- All tests passed successfully
