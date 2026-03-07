@@ -560,7 +560,17 @@ Contributions are welcome! Please read our contributing guidelines before submit
 
 ## 📋 Recent Updates
 
-### Genetic Algorithm Optimizer (Latest)
+### Risk Management Integration (Latest)
+- ✅ Risk Service with Exchange Integration
+- ✅ Real-time Portfolio Data from Exchanges
+- ✅ GARCH-VaR Integration for Dynamic Risk Assessment
+- ✅ Kill Switch for All Bot Types (DCA, BB, GRID, ORION, LOGOS, MFT)
+- ✅ WebSocket Risk Monitor (port 3004)
+- ✅ Real-time Risk Alerts and Notifications
+- ✅ API Endpoints for Risk Data, Bot Status, Kill Switch
+- ✅ UI Dashboard Connected to API/WebSocket
+
+### Genetic Algorithm Optimizer
 - ✅ GA Service for Optimization Job Management
 - ✅ API Endpoints: optimize, progress, apply
 - ✅ GARCH Integration for Volatility-Aware Optimization
