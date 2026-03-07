@@ -1,0 +1,108 @@
+# CITARION Alert Rules
+# Prometheus alerting rules for trading metrics
+
+groups:
+  - name: citarion_trading_alerts
+    interval: 30s
+    rules:
+      # Alert on high drawdown
+      - alert: HighDrawdown
+        expr: citarion_max_drawdown_percent > 20
+        for: 5m
+        labels:
+          severity: critical
+          category: trading
+        annotations:
+          summary: "High Drawdown Alert"
+          description: "Drawdown has exceeded 20% (current: {{ $value }}%)"
+
+      # Alert on consecutive losses
+      - alert: ConsecutiveLosses
+        expr: citarion_losses_total - citarion_losses_total offset 1h > 10
+        for: 5m
+        labels:
+          severity: warning
+          category: trading
+        annotations:
+          summary: "Multiple Consecutive Losses"
+          description: "{{ $value }} losing trades in the last hour"
+
+      # Alert on low win rate
+      - alert: LowWinRate
+        expr: citarion_win_rate_percent < 40
+        for: 15m
+        labels:
+          severity: warning
+          category: trading
+        annotations:
+          summary: "Low Win Rate"
+          description: "Win rate has dropped below 40% (current: {{ $value }}%)"
+
+      # Alert on negative PnL
+      - alert: NegativePnL
+        expr: citarion_pnl_total_usdt < 0
+        for: 30m
+        labels:
+          severity: warning
+          category: trading
+        annotations:
+          summary: "Negative PnL"
+          description: "Total PnL is negative: {{ $value }} USDT"
+
+      # Alert on too many open positions
+      - alert: TooManyOpenPositions
+        expr: citarion_positions_open > 10
+        for: 5m
+        labels:
+          severity: warning
+          category: risk
+        annotations:
+          summary: "Too Many Open Positions"
+          description: "Currently {{ $value }} open positions"
+
+      # Alert on no active bots when expected
+      - alert: NoActiveBots
+        expr: sum(citarion_bots_active) == 0
+        for: 10m
+        labels:
+          severity: info
+          category: system
+        annotations:
+          summary: "No Active Trading Bots"
+          description: "There are no active trading bots running"
+
+  - name: citarion_system_alerts
+    interval: 30s
+    rules:
+      # Alert on high API error rate
+      - alert: HighAPIErrorRate
+        expr: citarion_api_error_rate > 10
+        for: 5m
+        labels:
+          severity: warning
+          category: system
+        annotations:
+          summary: "High API Error Rate"
+          description: "API error rate is {{ $value }}%"
+
+      # Alert on slow API response
+      - alert: SlowAPIResponse
+        expr: citarion_api_duration_seconds{quantile="0.95"} > 2
+        for: 5m
+        labels:
+          severity: warning
+          category: system
+        annotations:
+          summary: "Slow API Response"
+          description: "P95 API response time is {{ $value }}s"
+
+      # Alert on metrics exporter errors
+      - alert: MetricsExporterErrors
+        expr: citarion_exporter_errors_total > 0
+        for: 1m
+        labels:
+          severity: warning
+          category: system
+        annotations:
+          summary: "Metrics Exporter Errors"
+          description: "Prometheus exporter encountered errors"

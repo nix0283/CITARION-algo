@@ -1,0 +1,2525 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ==================== USER MANAGEMENT ====================
+
+model User {
+  id          String  @id @default(cuid())
+  email       String  @unique
+  name        String?
+  password    String?
+  image       String?
+  currentMode String  @default("DEMO") // REAL or DEMO
+
+  // Telegram integration
+  telegramId         String?   @unique // Telegram user ID
+  telegramUsername   String? // Telegram username
+  telegramVerified   Boolean   @default(false) // Telegram account linked
+  telegramLinkCode   String?   @unique // One-time code for linking
+  telegramLinkExpiry DateTime? // Expiry time for link code
+
+  // Two-Factor Authentication (2FA)
+  twoFactorEnabled    Boolean   @default(false) // Whether 2FA is enabled
+  twoFactorSecret     String?   // Encrypted TOTP secret
+  twoFactorBackupCodes String?   // JSON array of hashed backup codes
+  twoFactorEnabledAt  DateTime? // When 2FA was enabled
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  accounts   Account[]
+  trades     Trade[]
+  botConfigs BotConfig[]
+  sessions   Session[]
+  apiKeys    ApiKey[]
+
+  classifiedSignals ClassifiedSignal[]
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+}
+
+// API Keys for bot/service authentication
+model ApiKey {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Key identification
+  name        String   // Friendly name for the key
+  keyHash     String   @unique // SHA-256 hash of the key
+  keyPrefix   String   // First 10 chars for identification (ck_xxxxxxxx)
+
+  // Permissions (JSON array)
+  permissions String   @default("[\"trade:read\", \"trade:write\"]")
+
+  // Status
+  isActive    Boolean  @default(true)
+  lastUsedAt  DateTime?
+  expiresAt   DateTime?
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([userId, isActive])
+}
+
+// ==================== ACCOUNT MANAGEMENT ====================
+
+model Account {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Account type
+  accountType String @default("DEMO") // REAL or DEMO
+
+  // Exchange configuration
+  exchangeId   String @default("binance") // binance, bybit, okx, bitget, kucoin, bingx, coinbase, huobi, hyperliquid, bitmex, blofin
+  exchangeType String @default("spot") // spot, futures, inverse
+  exchangeName String @default("Binance") // Display name
+
+  // API Keys (only for REAL accounts, encrypted)
+  apiKey        String?
+  apiSecret     String?
+  apiPassphrase String? // For exchanges like OKX, KuCoin that require passphrase
+  apiUid        String? // For some exchanges that require UID
+
+  // Sub-account support
+  subAccount String?
+
+  // Testnet mode
+  isTestnet Boolean @default(false)
+
+  // Virtual Balance (only for DEMO accounts)
+  // JSON string: {"USDT": 10000.00, "BTC": 0.5, "ETH": 2.0}
+  virtualBalance String?
+
+  // Account settings
+  isActive   Boolean   @default(true)
+  lastSyncAt DateTime?
+  lastError  String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  trades            Trade[]
+  positions         Position[]
+  botConfigs        BotConfig[]
+  gridBots          GridBot[]
+  dcaBots           DcaBot[]
+  bbBots            BBBot[]
+  visionBots        VisionBot[]
+  escortRequests    EscortRequest[]
+  externalPositions ExternalPosition[]
+  pendingRequests   PendingPositionRequest[]
+
+  @@unique([userId, exchangeId, exchangeType])
+}
+
+// ==================== TRADING ====================
+
+model Trade {
+  id        String  @id @default(cuid())
+  userId    String
+  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accountId String
+  account   Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  // Trade identification
+  symbol    String // e.g., BTCUSDT
+  direction String // LONG or SHORT
+  status    String @default("PENDING") // PENDING, OPEN, CLOSED, CANCELLED, VIRTUAL_FILLED
+
+  // Entry information
+  entryPrice Float?
+  entryTime  DateTime?
+  amount     Float // Position size
+  leverage   Int       @default(1)
+
+  // Exit information
+  exitPrice   Float?
+  exitTime    DateTime?
+  closeReason String? // TP, SL, MANUAL, LIQUIDATION
+
+  // Risk management
+  stopLoss    Float?
+  takeProfits String? // JSON array: [{"price": 50000, "percentage": 50}, ...]
+
+  // PnL calculation
+  pnl        Float @default(0)
+  pnlPercent Float @default(0)
+  fee        Float @default(0)
+
+  // Signal source
+  signalSource String? // TELEGRAM, DISCORD, TRADINGVIEW, MANUAL
+  signalId     String?
+
+  // Demo flag
+  isDemo Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  position   Position? @relation(fields: [positionId], references: [id])
+  positionId String?   @unique
+}
+
+model Position {
+  id        String  @id @default(cuid())
+  accountId String
+  account   Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  symbol    String
+  direction String // LONG or SHORT
+  status    String @default("OPEN") // OPEN, CLOSED
+
+  // Position details
+  totalAmount   Float
+  filledAmount  Float  @default(0)
+  avgEntryPrice Float
+  currentPrice  Float?
+  leverage      Int    @default(1)
+
+  // Source tracking
+  source             String  @default("PLATFORM") // PLATFORM, EXTERNAL, SIGNAL
+  exchangePositionId String? // ID позиции на бирже (для EXTERNAL)
+
+  // Escort (сопровождение) - для позиций открытых вручную на бирже
+  escortEnabled Boolean @default(false) // Включено сопровождение
+  escortStatus  String? // PENDING_CONFIRMATION, ESCORTING, IGNORED, SL_HIT, TP_HIT, TRAILING_HIT
+
+  // Risk management
+  stopLoss          Float?
+  takeProfit        Float?
+  trailingStop      String? // JSON: {"type": "PERCENT", "value": 5, "activated": false, "highestPrice": 100000}
+  trailingActivated Boolean @default(false) // Whether trailing stop is activated
+
+  // PnL
+  unrealizedPnl Float @default(0)
+  realizedPnl   Float @default(0)
+
+  // Funding tracking
+  totalFundingPaid     Float     @default(0) // Total funding paid (positive = paid)
+  totalFundingReceived Float     @default(0) // Total funding received (positive = received)
+  lastFundingTime      DateTime? // Last funding settlement time
+
+  // Fees
+  openFee  Float @default(0)
+  closeFee Float @default(0)
+
+  // Highest price for trailing stop
+  highestPrice Float? // Highest price reached (for trailing stop)
+  lowestPrice  Float? // Lowest price reached (for trailing stop SHORT)
+
+  isDemo      Boolean   @default(true)
+  closedAt    DateTime?
+  closeReason String? // TP, SL, MANUAL, TRAILING, EXTERNAL_CLOSE
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  trades          Trade[]
+  fundingPayments FundingPayment[]
+  Signal          Signal? // Back-reference to the signal that created this position
+  escortRequest   EscortRequest?
+
+  @@index([source, escortStatus])
+  @@index([accountId, status])
+}
+
+// ==================== ESCORT REQUEST ====================
+// Запросы на сопровождение позиций, открытых вручную на бирже
+
+model EscortRequest {
+  id        String  @id @default(cuid())
+  accountId String
+  account   Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  // Position info
+  symbol     String
+  direction  String // LONG or SHORT
+  size       Float
+  entryPrice Float
+  leverage   Int    @default(1)
+
+  // Exchange info
+  exchange           String // binance, bybit, okx...
+  marketType         String // spot or futures
+  exchangePositionId String? // ID позиции на бирже
+
+  // Status
+  status String @default("PENDING") // PENDING, ACCEPTED, REJECTED, TIMEOUT
+
+  // Timestamps
+  createdAt   DateTime  @default(now())
+  respondedAt DateTime?
+
+  // Relation to Position
+  positionId String?   @unique
+  position   Position? @relation(fields: [positionId], references: [id])
+
+  @@index([accountId, status])
+  @@index([status, createdAt])
+}
+
+// ==================== SIGNAL ID COUNTER ====================
+
+model SignalIdCounter {
+  id        String   @id @default("signal_counter")
+  lastId    Int      @default(0)
+  updatedAt DateTime @updatedAt
+}
+
+// ==================== SIGNAL PARSING ====================
+
+model Signal {
+  id     String  @id @default(cuid())
+  userId String?
+  // user          User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Sequential signal ID (Cornix-style)
+  signalId Int @unique
+
+  // Source information
+  source        String // TELEGRAM, DISCORD, TRADINGVIEW, MANUAL, APP
+  sourceChannel String?
+  sourceMessage String? // Original message text
+
+  // Parsed signal data
+  symbol     String
+  direction  String // LONG or SHORT
+  action     String // BUY, SELL, CLOSE
+  marketType String @default("FUTURES") // SPOT or FUTURES
+
+  // Entry prices (can be range or multiple)
+  entryPrices  String? // JSON array: [50000, 49500, 49000]
+  entryZone    String? // JSON: {"min": 50000, "max": 51000}
+  entryWeights String? // JSON array for DCA: [50, 30, 20]
+
+  // Exit targets
+  takeProfits String? // JSON array: [{"price": 52000, "percentage": 30}, ...]
+  stopLoss    Float?
+
+  // Additional info
+  leverage     Int    @default(1)
+  leverageType String @default("ISOLATED") // ISOLATED or CROSS
+  signalType   String @default("REGULAR") // REGULAR or BREAKOUT
+
+  // Trailing config
+  trailingConfig String? // JSON: {"entry": {...}, "takeProfit": {...}, "stop": {...}}
+
+  // Risk management
+  amountPerTrade Float?
+  riskPercentage Float?
+
+  // Target exchanges
+  exchanges String? // JSON array: ["Binance", "Bybit"]
+
+  // Processing status
+  status       String    @default("PENDING") // PENDING, ACTIVE, FILLED, CLOSED, CANCELLED, FAILED, IGNORED
+  errorMessage String?
+  processedAt  DateTime?
+  closedAt     DateTime?
+  closeReason  String? // TP, SL, MANUAL, SIGNAL
+
+  // Execution result
+  executedTrades String? // JSON array of trade IDs
+
+  // Position reference
+  positionId String?   @unique
+  position   Position? @relation(fields: [positionId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([signalId])
+  @@index([symbol, marketType, status])
+}
+
+// ==================== PROCESSED SIGNAL (DEDUPLICATION) ====================
+// Tracks processed signals for double-entry protection
+
+model ProcessedSignalRecord {
+  id String @id @default(cuid())
+
+  // Signal fingerprint for deduplication
+  signalHash   String @unique // SHA-256 hash of canonical signal
+  symbol       String
+  direction    String // LONG or SHORT
+  entryPrices  String // JSON array: [50000, 49500]
+  signalSource String? // TELEGRAM, DISCORD, TRADINGVIEW, MANUAL
+
+  // Processing result
+  status     String // EXECUTED, IGNORED, FAILED, DUPLICATE
+  positionId String?
+  tradeId    String?
+  signalId   Int? // Reference to Signal.signalId
+
+  // Timing
+  processedAt DateTime  @default(now())
+  expiresAt   DateTime // TTL expiry time
+
+  // Additional context
+  rawTextHash String? // Hash of original message text
+  metadata    String? // JSON: additional processing info
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([signalHash])
+  @@index([symbol, direction, processedAt])
+  @@index([expiresAt])
+}
+
+// ==================== BOT CONFIGURATION ====================
+
+model BotConfig {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accountId String?
+  account   Account? @relation(fields: [accountId], references: [id])
+
+  name        String
+  description String?
+  isActive    Boolean @default(false)
+
+  // ==================== EXCHANGE SETTINGS ====================
+  exchangeId   String @default("binance")
+  exchangeType String @default("futures") // spot, futures, inverse
+
+  // ==================== GENERAL SETTINGS ====================
+  // Amount per Trade
+  tradeAmount    Float   @default(100) // Amount value (USDT or %)
+  amountType     String  @default("FIXED") // FIXED or PERCENTAGE
+  amountOverride Boolean @default(false) // Use personal setting over signal
+
+  // Close Trade on TP/SL before Entry
+  closeOnTPSLBeforeEntry Boolean @default(true)
+
+  // ==================== FIRST ENTRY AS MARKET ====================
+  // Enhanced First Entry Grace (Cornix-compatible)
+  // Helps not to miss trades by expanding the first entry price range
+  firstEntryAsMarketEnabled   Boolean @default(false)
+  firstEntryAsMarketCap      Float   @default(1) // Maximum price cap % (0.05-20)
+  firstEntryAsMarketActivate String  @default("ENTRY_PRICE_REACHED") // ENTRY_PRICE_REACHED or IMMEDIATELY
+
+  // ==================== TRAILING STOP SETTINGS (Cornix-compatible) ====================
+  // 5 Types: BREAKEVEN, MOVING_TARGET, MOVING_2_TARGET, PERCENT_BELOW_TRIGGERS, PERCENT_BELOW_HIGHEST
+  trailingEnabled      Boolean @default(false)
+  trailingType         String  @default("BREAKEVEN") // BREAKEVEN, MOVING_TARGET, MOVING_2_TARGET, PERCENT_BELOW_TRIGGERS, PERCENT_BELOW_HIGHEST
+
+  // Trigger settings - when to activate trailing
+  trailingTriggerType  String  @default("TARGET_REACHED") // TARGET_REACHED, PERCENT_ABOVE_ENTRY
+  trailingTriggerValue Float?  // Target # (1-10) or percentage for PERCENT_ABOVE_ENTRY
+
+  // Trailing parameters
+  trailingPercent      Float?  // % distance for trailing (for PERCENT_BELOW_TRIGGERS, PERCENT_BELOW_HIGHEST)
+
+  // Runtime state (updated during execution)
+  trailingActivated    Boolean @default(false) // Whether trailing is currently active
+  trailingHighestPrice Float?  // Highest price reached (for PERCENT_BELOW_HIGHEST)
+
+  // ==================== ENTRY STRATEGY ====================
+  entryStrategy    String  @default("EVENLY_DIVIDED") // EVENLY_DIVIDED, CUSTOM_RATIOS, DECREASING_EXP, INCREASING_EXP, DCA
+  entryWeights     String? // JSON: [50, 30, 20] for custom ratios
+  entryZoneTargets Int     @default(1) // Number of targets in entry zone (1-10)
+
+  // DCA Entry Settings (Cornix-compatible)
+  dcaFirstEntryPercent Float?  // % of total for first entry (null = use same as others)
+  dcaAmountScale       Float   @default(1) // Multiplier between orders (e.g., 2 = double each order)
+  dcaPriceDiff         Float   @default(1) // % difference between 1st and 2nd order
+  dcaPriceScale        Float   @default(1) // Multiplier for price diff from 2nd order onwards
+  dcaMaxPriceDiff      Float   @default(10) // Max % distance from first to last order
+
+  // ==================== TAKE-PROFIT STRATEGY ====================
+  tpStrategy     String  @default("ONE_TARGET") // ONE_TARGET, MULTIPLE_TARGETS, ALL_TARGETS
+  tpTargetCount  Int     @default(1) // Number of TP targets (1-10)
+  tpCustomRatios String? // JSON: [30, 40, 30] custom percentages
+
+  // Take Profit Grace (Cornix-compatible)
+  tpGraceEnabled Boolean @default(false) // Enable TP Grace for low liquidity
+  tpGraceMaxCap  Float   @default(0.5) // Maximum price cap % for retries
+
+  // ==================== STOP-LOSS SETTINGS ====================
+  defaultStopLoss Float? // Percentage (e.g., 15 = 15%), null = disabled
+  slTimeout       Int    @default(0) // Seconds before SL triggers (0 = immediate)
+  slTimeoutUnit   String @default("SECONDS") // SECONDS, MINUTES, HOURS
+  slOrderType     String @default("MARKET") // MARKET or LIMIT
+
+  // ==================== MARGIN SETTINGS ====================
+  leverage         Int     @default(1)
+  leverageOverride Boolean @default(false) // Use personal leverage over signal
+  hedgeMode        Boolean @default(false) // false = One-Way, true = Hedge Mode
+  marginMode       String  @default("ISOLATED") // ISOLATED or CROSSED
+
+  // ==================== AUTO-TRADING FILTERS ====================
+  maxOpenTrades      Int     @default(5)
+  minTradeInterval   Int     @default(5) // Minutes between trades on same pair
+  allowedSymbols     String? // JSON array: ["BTCUSDT", "ETHUSDT"]
+  blacklistedSymbols String? // JSON array of blocked pairs
+
+  // ==================== SIGNAL SETTINGS ====================
+  signalSources          String? // JSON array: ["TELEGRAM", "DISCORD", "TRADINGVIEW"]
+  ignoreSignalsWithoutSL Boolean @default(false)
+  ignoreSignalsWithoutTP Boolean @default(false)
+  minRiskRewardRatio     Float? // Minimum R:R ratio to execute
+
+  // ==================== AUTO-EXECUTE SETTINGS ====================
+  autoExecuteEnabled              Boolean @default(false) // Auto-execute signals from TradingView/Telegram
+  autoExecuteSources              String? // JSON array: ["TRADINGVIEW", "TELEGRAM"] - which sources can auto-execute
+  autoExecuteRequiresConfirmation Boolean @default(true) // Require confirmation before execution
+
+  // ==================== FEE SETTINGS (Customizable) ====================
+  // Spot trading fees (decimal: 0.001 = 0.1%)
+  spotMakerFee Float @default(0.001) // Maker fee for spot orders
+  spotTakerFee Float @default(0.001) // Taker fee for spot orders
+
+  // Futures trading fees (decimal: 0.0002 = 0.02%)
+  futuresMakerFee Float @default(0.0002) // Maker fee for futures orders
+  futuresTakerFee Float @default(0.0004) // Taker fee for futures orders
+
+  // Slippage for market orders (decimal: 0.0005 = 0.05%)
+  slippagePercent Float @default(0.0005) // Default slippage for demo trading
+
+  // Use custom fees or exchange defaults
+  useCustomFees Boolean @default(false) // Override exchange defaults
+
+  // ==================== NOTIFICATIONS ====================
+  notifyOnEntry     Boolean @default(true)
+  notifyOnExit      Boolean @default(true)
+  notifyOnSL        Boolean @default(true)
+  notifyOnTP        Boolean @default(true)
+  notifyOnError     Boolean @default(true)
+  notifyOnNewSignal Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ==================== MARKET DATA CACHE ====================
+
+model MarketPrice {
+  id       String @id @default(cuid())
+  symbol   String @unique
+  exchange String @default("BINANCE")
+
+  price              Float
+  bidPrice           Float?
+  askPrice           Float?
+  high24h            Float?
+  low24h             Float?
+  volume24h          Float?
+  priceChangePercent Float?
+
+  lastUpdate DateTime @default(now())
+}
+
+// ==================== SYSTEM LOGS ====================
+
+model SystemLog {
+  id       String @id @default(cuid())
+  level    String // INFO, WARNING, ERROR
+  category String // TRADE, SIGNAL, API, SYSTEM
+
+  message String
+  details String? // JSON for additional data
+
+  userId  String?
+  tradeId String?
+
+  createdAt DateTime @default(now())
+}
+
+// ==================== TRADINGVIEW WEBHOOK ====================
+
+model TradingViewWebhookLog {
+  id String @id @default(cuid())
+
+  // Raw webhook data
+  rawPayload  String // Original payload received
+  contentType String? // Content-Type header
+
+  // Parsed signal data
+  symbol      String?
+  action      String? // BUY, SELL, CLOSE
+  direction   String? // LONG, SHORT
+  price       Float?
+  stopLoss    Float?
+  takeProfit  Float?
+  takeProfits String? // JSON array
+  leverage    Int?
+
+  // Processing status
+  status     String  @default("RECEIVED") // RECEIVED, PARSED, EXECUTED, FAILED
+  parseError String?
+  confidence Float? // 0-1 parsing confidence
+
+  // Execution result
+  tradeId      String?
+  errorMessage String?
+
+  // Source info
+  ipAddress String?
+  userAgent String?
+
+  // User association (optional - for API key auth)
+  userId String?
+
+  createdAt   DateTime  @default(now())
+  processedAt DateTime?
+}
+
+// ==================== FUNDING RATE DATA ====================
+
+model FundingRateHistory {
+  id String @id @default(cuid())
+
+  symbol   String
+  exchange String @default("binance")
+
+  // Funding data
+  fundingRate Float // Decimal: 0.0001 = 0.01%
+  fundingTime DateTime // Time of funding settlement
+  markPrice   Float?
+  indexPrice  Float?
+
+  createdAt DateTime @default(now())
+
+  @@index([symbol, exchange, fundingTime])
+}
+
+model FundingPayment {
+  id         String   @id @default(cuid())
+  positionId String
+  position   Position @relation(fields: [positionId], references: [id], onDelete: Cascade)
+
+  // Funding details
+  symbol      String
+  direction   String // LONG or SHORT
+  quantity    Float // Position size at funding time
+  fundingRate Float // Funding rate at settlement
+  payment     Float // Positive = received, Negative = paid
+
+  // Timestamps
+  fundingTime DateTime // When funding was settled
+  createdAt   DateTime @default(now())
+
+  @@index([positionId])
+  @@index([symbol, fundingTime])
+}
+
+// ==================== PNL HISTORY (EQUITY CURVE) ====================
+
+model PnLHistory {
+  id     String @id @default(cuid())
+  userId String
+
+  // Time period
+  timestamp DateTime @default(now())
+
+  // Account type
+  isDemo Boolean @default(true)
+
+  // Balance snapshot
+  balance Float // Total balance at timestamp
+  equity  Float // Balance + unrealized PnL
+
+  // PnL components
+  realizedPnL   Float @default(0) // Closed trades PnL
+  unrealizedPnL Float @default(0) // Open positions PnL
+  fundingPnL    Float @default(0) // Funding received/paid
+  feesPaid      Float @default(0) // Total fees paid
+
+  // Trade stats
+  tradesCount Int @default(0) // Number of trades
+  winsCount   Int @default(0) // Winning trades
+  lossesCount Int @default(0) // Losing trades
+
+  createdAt DateTime @default(now())
+
+  @@index([userId, isDemo, timestamp])
+}
+
+// ==================== GRID BOT ====================
+
+model GridBot {
+  id        String  @id @default(cuid())
+  userId    String
+  accountId String
+  account   Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  name        String
+  description String?
+  isActive    Boolean @default(false)
+
+  // Trading pair
+  symbol     String // e.g., BTCUSDT
+  exchangeId String @default("binance")
+  direction  String @default("LONG") // LONG or SHORT
+
+  // Grid settings
+  gridType  String @default("ARITHMETIC") // ARITHMETIC or GEOMETRIC
+  gridCount Int    @default(10) // Number of grid levels (2-100)
+
+  // Price range
+  upperPrice Float // Upper price boundary
+  lowerPrice Float // Lower price boundary
+
+  // Investment
+  totalInvestment Float // Total USDT to invest
+  perGridAmount   Float? // Amount per grid (auto-calculated if null)
+
+  // Leverage (for futures)
+  leverage   Int    @default(1)
+  marginMode String @default("ISOLATED") // ISOLATED or CROSSED
+
+  // Take Profit / Stop Loss
+  takeProfit Float? // Price to close all positions
+  stopLoss   Float? // Price to stop loss
+
+  // Trigger settings
+  triggerPrice Float? // Price to activate the bot (null = immediate)
+  triggerType  String? // ABOVE or BELOW
+
+  // Grid levels state
+  levels String? // JSON array of grid levels with status
+
+  // Status tracking
+  status    String    @default("STOPPED") // STOPPED, RUNNING, PAUSED, COMPLETED, STOPPED_LOSS
+  startedAt DateTime?
+  stoppedAt DateTime?
+
+  // Performance
+  totalProfit Float @default(0)
+  totalTrades Int   @default(0)
+  realizedPnL Float @default(0)
+
+  // Adaptive Grid Settings
+  adaptiveEnabled    Boolean @default(false)
+  baseAtr            Float?
+  rebalanceThreshold Float   @default(0.05) // 5%
+  trailingGrid       Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  gridOrders GridOrder[]
+
+  @@index([userId, isActive])
+  @@index([symbol, exchangeId, isActive])
+}
+
+model GridOrder {
+  id        String  @id @default(cuid())
+  gridBotId String
+  gridBot   GridBot @relation(fields: [gridBotId], references: [id], onDelete: Cascade)
+
+  // Order details
+  gridLevel Int // Grid level (1 to gridCount)
+  price     Float // Price for this grid level
+
+  // Order type
+  side   String // BUY or SELL
+  status String @default("PENDING") // PENDING, OPEN, FILLED, CANCELLED
+
+  // Amount
+  amount Float // Amount to buy/sell
+  filled Float @default(0) // Filled amount
+
+  // Exchange order ID
+  exchangeOrderId String?
+
+  // Timestamps
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  filledAt  DateTime?
+
+  @@index([gridBotId, status])
+  @@index([gridBotId, gridLevel])
+}
+
+// ==================== DCA BOT ====================
+
+model DcaBot {
+  id        String  @id @default(cuid())
+  userId    String
+  accountId String
+  account   Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  name        String
+  description String?
+  isActive    Boolean @default(false)
+
+  // Trading pair
+  symbol     String // e.g., BTCUSDT
+  exchangeId String @default("binance")
+
+  // DCA settings
+  direction String @default("LONG") // LONG or SHORT
+
+  // Entry settings
+  entryType  String @default("MARKET") // MARKET or LIMIT
+  entryPrice Float? // Entry price for LIMIT orders
+  baseAmount Float // Base amount for first entry (USDT)
+
+  // DCA levels
+  dcaLevels     Int   @default(5) // Number of DCA levels (1-20)
+  dcaPercent    Float @default(5) // Price drop % for each DCA level
+  dcaMultiplier Float @default(1.5) // Amount multiplier for each DCA level
+
+  // Alternative: Custom DCA levels (JSON)
+  dcaCustomLevels String? // JSON: [{"priceDrop": 5, "amountMult": 1.5}, ...]
+
+  // Take Profit
+  tpType     String  @default("PERCENT") // PERCENT or PRICE
+  tpValue    Float   @default(10) // TP percentage or price
+  tpSellBase Boolean @default(false) // Sell only base currency (keep profit)
+
+  // Stop Loss
+  slEnabled Boolean @default(false)
+  slType    String  @default("PERCENT") // PERCENT or PRICE
+  slValue   Float? // SL percentage or price
+
+  // Leverage (for futures)
+  leverage   Int    @default(1)
+  marginMode String @default("ISOLATED") // ISOLATED or CROSSED
+
+  // Trailing
+  trailingEnabled Boolean @default(false)
+  trailingPercent Float? // Trailing stop percentage
+
+  // Status tracking
+  status    String    @default("STOPPED") // STOPPED, RUNNING, PAUSED, COMPLETED
+  startedAt DateTime?
+  stoppedAt DateTime?
+
+  // Current position
+  totalInvested Float  @default(0)
+  totalAmount   Float  @default(0) // Total coins purchased
+  avgEntryPrice Float?
+  currentLevel  Int    @default(0) // Current DCA level reached
+
+  // Performance
+  realizedPnL Float @default(0)
+  totalTrades Int   @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  dcaOrders DcaOrder[]
+
+  @@index([userId, isActive])
+  @@index([symbol, exchangeId, isActive])
+}
+
+model DcaOrder {
+  id       String @id @default(cuid())
+  dcaBotId String
+  dcaBot   DcaBot @relation(fields: [dcaBotId], references: [id], onDelete: Cascade)
+
+  // Order details
+  dcaLevel Int // DCA level (0 = initial, 1-N = DCA levels)
+  price    Float? // Price for this order
+
+  // Order type
+  side      String // BUY or SELL
+  orderType String @default("MARKET") // MARKET or LIMIT
+  status    String @default("PENDING") // PENDING, OPEN, FILLED, CANCELLED
+
+  // Amount
+  amount   Float // Amount in USDT
+  quantity Float @default(0) // Quantity of coins
+  filled   Float @default(0) // Filled amount
+
+  // Exchange order ID
+  exchangeOrderId String?
+
+  // Timestamps
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  filledAt  DateTime?
+
+  @@index([dcaBotId, status])
+  @@index([dcaBotId, dcaLevel])
+}
+
+// ==================== BB BOT (Bollinger Bands Bot) ====================
+// Event-based trading bot using Double Bollinger Bands, Slow Stochastic, and Moving Averages
+
+model BBBot {
+  id        String  @id @default(cuid())
+  userId    String
+  accountId String
+  account   Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  name        String
+  description String?
+  isActive    Boolean @default(false)
+
+  // Trading pair
+  symbol     String // e.g., BTCUSDT
+  exchangeId String @default("binance")
+
+  // Market type - SPOT or FUTURES
+  // For SPOT: direction is always "LONG" (buy then sell)
+  // For FUTURES: can be LONG, SHORT, or BOTH
+  marketType String @default("FUTURES") // SPOT or FUTURES
+
+  // Timeframe settings (up to 3 timeframes)
+  // JSON array: ["5m", "15m", "1h"]
+  timeframes String @default("[\"15m\"]")
+
+  // Position settings
+  direction   String @default("BOTH") // LONG, SHORT, BOTH (for FUTURES) or LONG (for SPOT)
+  tradeAmount Float  @default(100) // Amount per trade in USDT
+  leverage    Int    @default(1)
+  marginMode  String @default("ISOLATED") // ISOLATED or CROSSED
+
+  // Risk management
+  stopLoss     Float? // Stop loss percentage
+  takeProfit   Float? // Take profit percentage
+  trailingStop Float? // Trailing stop percentage
+
+  // Manual mode - launch with specific entry and targets
+  isManualMode     Boolean @default(false)
+  manualEntryPrice Float? // Entry price for manual launch
+  manualTargets    String? // JSON array: [{"price": 50000, "percentage": 50}, ...]
+  manualStopLoss   Float? // Stop loss price for manual mode
+
+  // Status tracking
+  status    String    @default("STOPPED") // STOPPED, RUNNING, PAUSED
+  startedAt DateTime?
+  stoppedAt DateTime?
+
+  // Performance
+  totalProfit Float @default(0)
+  totalTrades Int   @default(0)
+  winTrades   Int   @default(0)
+  lossTrades  Int   @default(0)
+  realizedPnL Float @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  timeframeConfigs BBotTimeframeConfig[]
+  bbSignals        BBSignal[]
+
+  @@index([userId, isActive])
+  @@index([symbol, exchangeId, isActive])
+  @@index([symbol, marketType, direction, isActive]) // For checking limits
+}
+
+// BB Bot Timeframe Configuration
+// Each timeframe has its own indicator settings
+model BBotTimeframeConfig {
+  id      String @id @default(cuid())
+  bbBotId String
+  bbBot   BBBot  @relation(fields: [bbBotId], references: [id], onDelete: Cascade)
+
+  // Timeframe
+  timeframe String // 1m, 5m, 15m, 30m, 1h, 4h, 1d
+
+  // ========== Double Bollinger Bands Settings ==========
+  bbEnabled Boolean @default(true)
+
+  // Inner Bollinger Bands (default: 20, 1)
+  bbInnerPeriod    Int   @default(20)
+  bbInnerDeviation Float @default(1.0)
+
+  // Outer Bollinger Bands (default: 20, 2)
+  bbOuterPeriod    Int   @default(20)
+  bbOuterDeviation Float @default(2.0)
+
+  // Bollinger Bands source
+  bbSource String @default("close") // close, open, high, low, hl2, hlc3
+
+  // ========== Slow Stochastic Settings ==========
+  stochEnabled    Boolean @default(true)
+  stochKPeriod    Int     @default(14)
+  stochDPeriod    Int     @default(3)
+  stochSlowing    Int     @default(3)
+  stochOverbought Int     @default(80)
+  stochOversold   Int     @default(20)
+
+  // ========== Moving Averages Settings ==========
+  // EMA Settings
+  emaEnabled Boolean @default(false)
+  emaPeriod  Int     @default(20)
+  emaSource  String  @default("close")
+
+  // SMA Settings
+  smaEnabled Boolean @default(false)
+  smaPeriod  Int     @default(50)
+  smaSource  String  @default("close")
+
+  // SMMA (Smoothed MA) Settings
+  smmaEnabled Boolean @default(false)
+  smmaPeriod  Int     @default(20)
+  smmaSource  String  @default("close")
+
+  // ========== Indicator Values Cache (updated in real-time) ==========
+  // JSON objects storing last calculated values
+  bbValues    String? // {"innerUpper": 100, "innerMiddle": 95, "innerLower": 90, ...}
+  stochValues String? // {"k": 75.5, "d": 72.3}
+  maValues    String? // {"ema": 95.5, "sma": 94.2, "smma": 95.0}
+
+  lastUpdate DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([bbBotId, timeframe])
+  @@index([bbBotId, timeframe])
+}
+
+// BB Bot Signal History
+// Stores all signals generated by the BB Bot for visualization and analysis
+model BBSignal {
+  id      String @id @default(cuid())
+  bbBotId String
+  bbBot   BBBot  @relation(fields: [bbBotId], references: [id], onDelete: Cascade)
+
+  symbol    String
+  timeframe String
+  type      String // LONG, SHORT, CLOSE
+  price     Float
+  timestamp DateTime
+
+  // Indicator values
+  bbUpper  Float
+  bbLower  Float
+  bbMiddle Float
+  stochK   Float
+  stochD   Float
+
+  reason String?
+
+  executed   Boolean @default(false)
+  positionId String?
+
+  createdAt DateTime @default(now())
+
+  @@index([bbBotId, timestamp])
+}
+
+// ==================== OHLCV CANDLE DATA ====================
+// Historical candlestick data stored locally for analysis and backtesting
+// Designed for future migration to TimescaleDB/ClickHouse
+
+model OhlcvCandle {
+  id String @id @default(cuid())
+
+  // Identification
+  symbol     String // e.g., BTCUSDT
+  exchange   String @default("binance") // binance, bybit, okx, etc.
+  marketType String @default("futures") // spot, futures, inverse
+
+  // Time
+  timeframe String // 1m, 5m, 15m, 1h, 4h, 1d
+  openTime  DateTime // Start time of candle
+  closeTime DateTime // End time of candle
+
+  // OHLCV Data
+  open   Float // Opening price
+  high   Float // Highest price
+  low    Float // Lowest price
+  close  Float // Closing price
+  volume Float // Trading volume
+
+  // Additional metrics
+  quoteVolume         Float? // Volume in quote currency (USDT)
+  trades              Int? // Number of trades
+  takerBuyVolume      Float? // Taker buy volume
+  takerBuyQuoteVolume Float? // Taker buy quote volume
+
+  // Metadata
+  isFinal Boolean @default(true) // Is this a closed candle?
+
+  createdAt DateTime @default(now())
+
+  @@unique([symbol, exchange, timeframe, openTime])
+  @@index([symbol, exchange, timeframe, openTime])
+  @@index([exchange, openTime])
+}
+
+// ==================== EXCHANGE SYNC STATUS ====================
+
+model ExchangeSyncStatus {
+  id String @id @default(cuid())
+
+  exchange   String // binance, bybit, okx, etc.
+  symbol     String // BTCUSDT
+  marketType String @default("futures") // spot, futures, inverse
+  timeframe  String @default("1h") // 1m, 5m, 15m, 1h, 4h, 1d
+
+  // Sync status
+  lastSyncTime   DateTime?
+  lastCandleTime DateTime? // Timestamp of the last synced candle
+  candlesCount   Int       @default(0) // Number of candles stored
+  isSyncing      Boolean   @default(false)
+  lastError      String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([exchange, symbol, marketType, timeframe])
+}
+
+// ==================== EXTERNAL POSITION TRACKING ====================
+// Positions opened manually on exchange, detected via API
+
+model ExternalPosition {
+  id        String  @id @default(cuid())
+  accountId String
+  account   Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  // Exchange identification
+  exchangeId   String // binance, bybit, okx, etc.
+  exchangeType String // spot, futures, inverse
+
+  // Position identification on exchange
+  exchangePositionId String? // Exchange-specific position ID
+  symbol             String // e.g., BTCUSDT
+
+  // Position details from exchange
+  direction String // LONG or SHORT
+  status    String @default("DETECTED") // DETECTED, PENDING_APPROVAL, ADOPTED, IGNORED, CLOSED
+
+  // Position size
+  amount        Float // Position size in coins
+  amountUsd     Float // Position size in USDT
+  avgEntryPrice Float
+  currentPrice  Float?
+  leverage      Int    @default(1)
+
+  // Unrealized PnL from exchange
+  unrealizedPnl        Float?
+  unrealizedPnlPercent Float?
+
+  // Risk management (to be set when adopted)
+  stopLoss     Float?
+  takeProfit   Float?
+  trailingStop String? // JSON: {"type": "PERCENT", "value": 5, "activated": false}
+
+  // Reference to internal position (when adopted)
+  positionId String?
+
+  // Detection timestamps
+  detectedAt DateTime  @default(now())
+  lastSyncAt DateTime?
+
+  // User response
+  userResponded Boolean   @default(false)
+  userResponse  String? // YES, NO
+  respondedAt   DateTime?
+
+  // Notification tracking
+  telegramMessageId String? // Telegram message ID for inline keyboard
+  notifiedAt        DateTime?
+
+  // Closed on exchange
+  closedAt    DateTime?
+  closeReason String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([accountId, symbol, direction, status])
+  @@index([accountId, status])
+  @@index([status, detectedAt])
+}
+
+// ==================== PENDING POSITION REQUEST ====================
+// Requests to adopt externally opened positions
+
+model PendingPositionRequest {
+  id        String  @id @default(cuid())
+  accountId String
+  account   Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  // Exchange info
+  exchange   String // binance, bybit, okx, etc.
+  marketType String // SPOT or FUTURES
+
+  // Position details
+  symbol        String
+  direction     String // LONG or SHORT
+  size          Float // Position size in coins
+  entryPrice    Float
+  currentPrice  Float
+  leverage      Int    @default(1)
+  unrealizedPnl Float  @default(0)
+
+  // Risk management from exchange
+  stopLoss         Float?
+  takeProfit       Float?
+  liquidationPrice Float?
+
+  // Request status
+  status String @default("PENDING") // PENDING, ACCEPTED, REJECTED, EXPIRED
+
+  // Expiration
+  expiresAt DateTime
+
+  // Telegram integration
+  telegramMessageId String?
+  telegramChatId    String?
+
+  // Timestamps
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  respondedAt DateTime?
+
+  // Reference to created position (when accepted)
+  positionId String?
+
+  @@unique([accountId, symbol, direction, status])
+  @@index([accountId, status])
+  @@index([status, expiresAt])
+}
+
+// ==================== AGGREGATED DAILY STATS ====================
+// Pre-calculated daily metrics for faster queries
+
+model DailyStats {
+  id String @id @default(cuid())
+
+  symbol   String
+  exchange String @default("binance")
+
+  // Date
+  date DateTime // Start of day (UTC)
+
+  // Price stats
+  open  Float
+  high  Float
+  low   Float
+  close Float
+
+  // Volume stats
+  volume      Float
+  quoteVolume Float
+  trades      Int
+
+  // Funding (for futures)
+  avgFundingRate Float?
+  totalFunding   Float?
+  fundingCount   Int    @default(0)
+
+  // Volatility
+  volatility         Float? // Daily volatility %
+  priceChangePercent Float?
+
+  createdAt DateTime @default(now())
+
+  @@unique([symbol, exchange, date])
+  @@index([symbol, exchange, date])
+}
+
+// ==================== MARKET SETTINGS ====================
+// User-configurable market display settings
+
+model MarketSettings {
+  id     String  @id @default(cuid())
+  userId String?
+
+  // Selected trading pairs configuration
+  // JSON array: [{"symbol": "BTCUSDT", "exchange": "binance"}, ...]
+  selectedPairs String @default("[]")
+
+  // UI preferences
+  showExchangeColumn Boolean @default(true)
+  show24hChange      Boolean @default(true)
+  showVolume         Boolean @default(false)
+
+  // Sorting
+  sortBy        String @default("symbol") // symbol, price, change24h
+  sortDirection String @default("asc") // asc, desc
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ==================== PAPER TRADING PERSISTENCE ====================
+
+model PaperTradingAccount {
+  id     String  @id @default(cuid())
+  userId String?
+
+  // Account config
+  name            String
+  initialBalance  Float
+  balance         Float
+  equity          Float
+  availableMargin Float
+  maxEquity       Float
+
+  // PnL tracking
+  totalPnl        Float @default(0)
+  totalPnlPercent Float @default(0)
+  realizedPnl     Float @default(0)
+  unrealizedPnl   Float @default(0)
+  maxDrawdown     Float @default(0)
+  currentDrawdown Float @default(0)
+
+  // Status
+  status    String    @default("IDLE") // IDLE, RUNNING, PAUSED, STOPPED
+  startedAt DateTime?
+  stoppedAt DateTime?
+
+  // Config JSON
+  config String // JSON: PaperTradingConfig
+
+  // State JSON (positions, tradeHistory, equityCurve)
+  positions    String @default("[]") // JSON array of PaperPosition
+  tradeHistory String @default("[]") // JSON array of PaperTrade
+  equityCurve  String @default("[]") // JSON array of last 1000 points
+
+  // Metrics JSON
+  metrics String? // JSON: PaperTradingMetrics
+
+  // Slippage tracking
+  slippageLog String @default("[]") // JSON array of slippage records
+
+  lastUpdate DateTime @default(now())
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([userId, status])
+}
+
+// ==================== ARGUS BOT ====================
+// Automated pump and dump detection and trading
+// Named after the mythological hundred-eyed giant who watches everything
+
+model ArgusBot {
+  id     String @id @default(cuid())
+  userId String
+  name   String
+
+  // Status
+  status String @default("ACTIVE") // ACTIVE, PAUSED, STOPPED
+
+  // Exchange settings
+  exchange  String  @default("bingx") // bingx, binance, bybit
+  accountId String?
+
+  // Strategy toggles
+  enable5Long   Boolean @default(true)
+  enable5Short  Boolean @default(true)
+  enable12Long  Boolean @default(true)
+  enable12Short Boolean @default(true)
+
+  // Detection thresholds (decimal: 0.05 = 5%)
+  pumpThreshold5m  Float @default(0.05)
+  pumpThreshold15m Float @default(0.10)
+  dumpThreshold5m  Float @default(-0.05)
+  dumpThreshold15m Float @default(-0.10)
+
+  // Market cap filter
+  maxMarketCap Float @default(100000000) // $100M default
+  minMarketCap Float @default(1000000) // $1M default
+
+  // Orderbook filter
+  useImbalanceFilter Boolean @default(false)
+  imbalanceThreshold Float   @default(0.2)
+
+  // Risk management
+  leverage     Int    @default(10)
+  positionSize Float  @default(50) // USDT per trade
+  stopLoss5    Float  @default(0.05) // 5%
+  stopLoss12   Float  @default(0.12) // 12%
+  takeProfit5  String @default("[0.05, 0.10, 0.15]") // JSON array
+  takeProfit12 String @default("[0.12, 0.18, 0.25]") // JSON array
+
+  // Trailing stop
+  useTrailing          Boolean @default(false)
+  trailingActivation5  Float   @default(0.03)
+  trailingActivation12 Float   @default(0.06)
+  trailingDistance5    Float   @default(0.015)
+  trailingDistance12   Float   @default(0.03)
+
+  // Cooldown
+  cooldownMinutes Int @default(30)
+
+  // Notifications
+  notifyOnSignal Boolean @default(true)
+  notifyOnTrade  Boolean @default(true)
+
+  // ==================== MARKET FORECAST INTEGRATION ====================
+  // Optional: Use Market Forecast to boost/filter signals
+  useMarketForecast    Boolean @default(false) // Enable forecast integration
+  forecastBoostSignals Boolean @default(true) // Apply forecast to boost signal confidence
+  forecastWeight       Float   @default(0.3) // Weight of forecast in signal scoring (0-1)
+  forecastConfirmOnly  Boolean @default(false) // Only trade when forecast confirms signal
+  forecastRiskProfile  String  @default("normal") // easy, normal, hard, scalper
+  forecastStrategy     String  @default("basic") // basic, multi_tp, trailing, reentry_24h
+
+  // Timestamps
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId, status])
+  @@index([exchange, status])
+}
+
+// ==================== ARGUS SIGNAL HISTORY ====================
+// Store detected pump/dump signals for analysis
+
+model ArgusSignal {
+  id String @id @default(cuid())
+
+  // Signal identification
+  symbol   String
+  exchange String
+  type     String // PUMP_5, PUMP_12, DUMP_5, DUMP_12
+
+  // Price data
+  priceChange   Float // Decimal: 0.05 = 5%
+  currentPrice  Float
+  previousPrice Float
+  volume24h     Float?
+
+  // Filters data
+  marketCap Float?
+  imbalance Float?
+
+  // Processing
+  processed   Boolean   @default(false)
+  processedAt DateTime?
+
+  // Result (if trade was opened)
+  tradeId String?
+  botId   String?
+
+  // Timestamp
+  timestamp DateTime @default(now())
+
+  @@index([symbol, type, timestamp])
+  @@index([processed, timestamp])
+}
+
+// ==================== MARKET FORECAST HISTORY ====================
+// Store 24-hour market forecasts for analysis and backtesting
+
+model MarketForecastHistory {
+  id String @id @default(cuid())
+
+  // Forecast result
+  direction  String // UPWARD, DOWNWARD, CONSOLIDATION
+  confidence Float // 0-1, how confident in the forecast
+
+  // Probabilities
+  upwardProb        Float // Probability of upward movement
+  downwardProb      Float // Probability of downward movement
+  consolidationProb Float // Probability of consolidation
+
+  // Market indicators at forecast time
+  avgRoc24h        Float // Average 24h rate of change
+  avgAtrPercent    Float // Average ATR as % of price
+  avgTrendStrength Float // Average EMA trend strength
+  avgVolumeRatio   Float // Average volume ratio
+  avgCorrelation   Float // Average cross-asset correlation
+
+  // Trading signal derived from forecast
+  tradingAction     String? // BUY, SELL, HOLD
+  tradingLeverage   Int? // Suggested leverage
+  stopLossPercent   Float? // Stop loss %
+  takeProfitPercent Float? // Take profit %
+  tradingReason     String? // Reason for the trading signal
+
+  // Accuracy tracking (filled after 24h)
+  actualDirection String? // Actual direction after 24h
+  priceChange24h  Float? // Actual price change after 24h
+  wasCorrect      Boolean? // Was forecast correct?
+
+  // Timestamps
+  timestamp   DateTime  @default(now())
+  evaluatedAt DateTime? // When actual result was evaluated
+
+  createdAt DateTime @default(now())
+
+  @@index([direction, timestamp])
+  @@index([wasCorrect, timestamp])
+}
+
+// ==================== BINANCE API LOGGING ====================
+// Comprehensive logging for Binance API requests, responses, and errors
+
+model BinanceApiRequestLog {
+  id String @id @default(cuid())
+
+  // Request info
+  timestamp    DateTime @default(now())
+  endpoint     String
+  method       String // GET, POST, DELETE
+  params       String? // JSON string of parameters (sanitized)
+  apiKeyMasked String? // Last 8 chars of API key
+
+  // Response info
+  responseCode Int
+  responseBody String? // JSON string of response (truncated if large)
+  duration     Int // milliseconds
+  errorMessage String?
+
+  // Rate limit tracking
+  rateLimitUsed Int?
+  rateLimitRem  Int?
+
+  // Context
+  accountId String?
+  userId    String?
+
+  createdAt DateTime @default(now())
+
+  @@index([timestamp])
+  @@index([endpoint])
+  @@index([responseCode])
+}
+
+model BinanceOrderEventLog {
+  id String @id @default(cuid())
+
+  // Timestamp
+  timestamp DateTime @default(now())
+
+  // Order identification
+  orderId         String?
+  clientOrderId   String?
+  symbol          String
+  exchangeOrderId String? // Exchange-specific order ID
+
+  // Order details
+  side   String // BUY or SELL
+  type   String // LIMIT, MARKET, etc.
+  status String // NEW, FILLED, CANCELLED, REJECTED, etc.
+
+  // Prices and quantities
+  price         Float?
+  quantity      Float?
+  executedQty   Float?
+  cumulativeQty Float?
+  avgPrice      Float?
+
+  // Fees
+  commission      Float?
+  commissionAsset String?
+
+  // Error tracking
+  event        String // CREATED, UPDATED, FILLED, CANCELLED, REJECTED
+  errorCode    Int?
+  errorMessage String?
+
+  // Raw data
+  rawData String? // JSON string of full response
+
+  // Context
+  accountId String?
+  userId    String?
+
+  createdAt DateTime @default(now())
+
+  @@index([timestamp])
+  @@index([symbol])
+  @@index([orderId])
+  @@index([clientOrderId])
+  @@index([event])
+}
+
+model BinanceErrorLog {
+  id String @id @default(cuid())
+
+  // Error info
+  timestamp    DateTime @default(now())
+  errorCode    Int
+  errorMessage String
+  httpStatus   Int
+
+  // Request context
+  endpoint String
+  params   String? // JSON string (sanitized)
+
+  // Categorization
+  category      String // NETWORK, AUTHENTICATION, RATE_LIMIT, INVALID_REQUEST, ORDER_REJECTED, INSUFFICIENT_FUNDS, UNKNOWN
+  isRecoverable Boolean @default(false)
+
+  // Resolution
+  resolved   Boolean   @default(false)
+  resolvedAt DateTime?
+  notes      String?
+  retryCount Int       @default(0)
+
+  // Context
+  accountId String?
+  userId    String?
+
+  createdAt DateTime @default(now())
+
+  @@index([timestamp])
+  @@index([errorCode])
+  @@index([category])
+  @@index([resolved])
+}
+
+model BinanceTradeLog {
+  id String @id @default(cuid())
+
+  // Timestamp
+  timestamp DateTime @default(now())
+
+  // Trade identification
+  tradeId     String
+  orderId     String?
+  orderListId String?
+
+  // Symbol and side
+  symbol  String
+  isBuyer Boolean
+
+  // Trade details
+  price    Float
+  quantity Float
+  quoteQty Float
+
+  // Fees
+  commission      Float
+  commissionAsset String
+
+  // Market info
+  isMaker     Boolean
+  isBestMatch Boolean
+
+  // Context
+  accountId String?
+  userId    String?
+
+  createdAt DateTime @default(now())
+
+  @@unique([tradeId, symbol])
+  @@index([timestamp])
+  @@index([symbol])
+  @@index([orderId])
+}
+
+// ==================== EXCHANGE API LOG ====================
+// Comprehensive logging of all API requests and responses
+
+model ExchangeApiLog {
+  id String @id @default(cuid())
+
+  // Timestamp
+  timestamp DateTime @default(now())
+
+  // Exchange identification
+  exchange    String // binance, bybit, okx, etc.
+  environment String @default("mainnet") // mainnet, testnet
+
+  // Request details
+  endpoint       String // API endpoint path
+  method         String // GET, POST, PUT, DELETE
+  category       String? // spot, linear, inverse, option (for Bybit)
+  requestParams  String? // JSON string of request parameters
+  requestHeaders String? // JSON string of headers (sensitive data masked)
+
+  // Response details
+  responseStatus Int // HTTP status code
+  responseTime   Int // Response time in milliseconds
+  responseBody   String? // JSON string of response body
+
+  // Error tracking
+  isError      Boolean @default(false)
+  errorCode    Int? // Exchange-specific error code
+  errorMessage String? // Error message from exchange
+  errorData    String? // JSON string of additional error data
+
+  // Classification
+  requestType      String // market, trade, account, websocket
+  isOrderRejection Boolean @default(false) // Specifically track order rejections
+
+  // Context
+  accountId String?
+  userId    String?
+
+  createdAt DateTime @default(now())
+
+  @@index([timestamp])
+  @@index([exchange, isError])
+  @@index([exchange, errorCode])
+  @@index([isOrderRejection])
+  @@index([requestType])
+}
+
+// ==================== EXCHANGE ERROR CATALOG ====================
+// Reference table of known error codes and their meanings
+
+model ExchangeErrorCatalog {
+  id String @id @default(cuid())
+
+  // Exchange identification
+  exchange  String // binance, bybit, okx
+  errorCode Int // Error code from exchange
+  errorName String // Error name/identifier
+
+  // Error classification
+  severity String @default("ERROR") // INFO, WARNING, ERROR, CRITICAL
+  category String // AUTH, RATE_LIMIT, ORDER, BALANCE, SYSTEM
+
+  // Documentation
+  description String // Human-readable description
+  solution    String? // Suggested solution
+
+  // Metadata
+  httpStatus    Int? // Associated HTTP status code
+  isRecoverable Boolean @default(true) // Can the error be recovered?
+
+  // Timestamps
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([exchange, errorCode])
+}
+
+// ==================== PINE SCRIPT INDICATORS ====================
+// Custom indicators written in Pine Script / PineTS syntax
+
+model PineIndicator {
+  id     String  @id @default(cuid())
+  userId String?
+
+  // Basic info
+  name        String
+  description String?
+  category    String  @default("custom") // custom, moving_average, oscillator, trend, volume, volatility
+
+  // Code
+  pineCode   String // Original Pine Script code
+  pinetsCode String? // Converted PineTS JavaScript code (cached)
+
+  // Settings schema
+  // JSON: [{"name": "length", "type": "int", "default": 14, "min": 1, "max": 200}, ...]
+  inputSchema String? @default("[]")
+
+  // Output config
+  // JSON: [{"name": "ma", "type": "line", "color": "#2962FF"}, ...]
+  outputConfig String? @default("[]")
+
+  // Display settings
+  overlay Boolean @default(true) // true = on main chart, false = separate pane
+  scale   String  @default("same") // same, left, right
+
+  // Metadata
+  version    String  @default("1.0.0")
+  author     String?
+  isPublic   Boolean @default(false) // Share with other users
+  isFeatured Boolean @default(false) // Featured in indicator library
+
+  // Usage tracking
+  useCount   Int       @default(0)
+  lastUsedAt DateTime?
+
+  // Status
+  status String @default("active") // active, deprecated, broken
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId, category])
+  @@index([isPublic, isFeatured])
+}
+
+// ==================== VISION BOT ====================
+// Market Forecast powered trading bot with automated signal execution
+
+model VisionBot {
+  id        String  @id @default(cuid())
+  accountId String
+  account   Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  name        String
+  description String?
+  isActive    Boolean @default(false)
+
+  // Trading pair
+  symbol     String @default("BTC/USDT")
+  exchangeId String @default("binance")
+
+  // Direction
+  direction String @default("LONG") // LONG, SHORT, BOTH
+
+  // Leverage and margin
+  leverage    Int    @default(10)
+  marginMode  String @default("ISOLATED") // ISOLATED or CROSSED
+  tradeAmount Float  @default(100) // Amount per trade in USDT
+
+  // Market Forecast settings
+  useForecast         Boolean @default(true)
+  confidenceThreshold Float   @default(0.7) // Minimum confidence to trade (0-1)
+  riskProfile         String  @default("normal") // easy, normal, hard, scalper
+  strategy            String  @default("reentry_24h") // basic, multi_tp, trailing, reentry_24h
+
+  // Risk management
+  stopLoss     Float? // Stop loss percentage (e.g., 5 = 5%)
+  takeProfit   Float? // Take profit percentage
+  trailingStop String? // JSON: {"enabled": true, "activationPercent": 3, "distancePercent": 1.5}
+
+  // Additional symbols for correlation analysis
+  // JSON array: ["ETH/USDT", "SOL/USDT"]
+  cryptoSymbols String @default("[\"BTC/USDT\"]")
+  stockIndices  String @default("[]") // JSON array: ["^GSPC", "^DJI"]
+  goldSymbol    String @default("GC=F")
+
+  // Analysis settings
+  timeframe         String @default("1h") // 5m, 15m, 1h, 4h, 1d
+  lookbackDays      Int    @default(30)
+  volatilityLow     Float  @default(0.01) // Low volatility threshold
+  volatilityHigh    Float  @default(0.05) // High volatility threshold
+  trendThreshold    Float  @default(0.02) // Trend detection threshold
+  correlationWeight Float  @default(0.30) // Weight of correlation in forecast
+
+  // Trading settings
+  tradingEnabled Boolean @default(false) // Enable actual trading (vs signals only)
+  tradingFee     Float   @default(0.001) // Trading fee (0.1% default)
+  initialCapital Float   @default(10000) // Starting capital for paper trading
+
+  // Timing
+  forecastIntervalMinutes Int @default(60) // How often to run forecast
+  tradingCycleHours       Int @default(24) // Trading cycle duration
+
+  // Telegram notifications
+  telegramEnabled Boolean @default(false)
+  telegramChatId  String?
+
+  // Status tracking
+  status         String    @default("STOPPED") // STOPPED, RUNNING, PAUSED
+  startedAt      DateTime?
+  stoppedAt      DateTime?
+  lastForecastAt DateTime?
+  lastTradeAt    DateTime?
+
+  // Performance
+  totalProfit Float @default(0)
+  totalTrades Int   @default(0)
+  winTrades   Int   @default(0)
+  lossTrades  Int   @default(0)
+  realizedPnL Float @default(0)
+  maxDrawdown Float @default(0)
+
+  // State (JSON for runtime data)
+  currentState String? // JSON: {"lastSignal": "LONG", "lastPrice": 50000, ...}
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([accountId, isActive])
+  @@index([symbol, exchangeId, isActive])
+}
+
+// ==================== STRATEGY TEMPLATE ====================
+// Reusable strategy templates for bots (stored as files + DB reference)
+
+model StrategyTemplate {
+  id     String  @id @default(cuid())
+  userId String?
+
+  // Basic info
+  name        String
+  description String?
+  category    String  @default("custom") // grid, dca, bb, argus, vision, custom
+  botType     String // GRID, DCA, BB, ARGUS, VISION
+
+  // Template data (JSON configuration)
+  config String // Full JSON configuration for the bot
+
+  // Metadata
+  version    String  @default("1.0.0")
+  author     String?
+  isPublic   Boolean @default(false)
+  isFeatured Boolean @default(false)
+
+  // Usage tracking
+  useCount Int @default(0)
+
+  // Tags for search
+  tags String? // JSON array: ["trend", "futures", "low-risk"]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([botType, isPublic])
+  @@index([userId, category])
+}
+
+// ==================== PAPER TRADING ENGINE V2 ====================
+// Separate tables for better data integrity and querying
+
+model PaperAccount {
+  id              String   @id @default(uuid())
+  userId          String?
+  initialBalance  Float
+  balance         Float
+  equity          Float
+  availableMargin Float
+  marginUsed      Float
+  currentDrawdown Float
+  maxDrawdown     Float
+  status          String   @default("ACTIVE")
+  positions       String? // JSON
+  equityCurve     String? // JSON (последние 1000 точек)
+  metrics         String? // JSON
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  paperPositions PaperPosition[]
+  paperTrades    PaperTrade[]
+
+  @@index([userId, status])
+}
+
+model PaperPosition {
+  id               String    @id @default(uuid())
+  accountId        String
+  symbol           String
+  direction        String
+  totalSize        Float
+  entryPrice       Float
+  currentPrice     Float
+  unrealizedPnl    Float
+  stopLoss         Float?
+  takeProfit       String? // JSON array
+  leverage         Int
+  marginUsed       Float
+  liquidationPrice Float?
+  status           String    @default("OPEN")
+  trailingStop     String? // JSON
+  totalFundingPaid Float     @default(0)
+  openedAt         DateTime  @default(now())
+  closedAt         DateTime?
+
+  account PaperAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@index([accountId, status])
+  @@index([symbol, status])
+}
+
+model PaperTrade {
+  id         String   @id @default(uuid())
+  accountId  String
+  positionId String?
+  symbol     String
+  direction  String
+  side       String // OPEN, CLOSE, PARTIAL_CLOSE
+  size       Float
+  price      Float
+  pnl        Float?
+  fee        Float
+  reason     String?
+  timestamp  DateTime @default(now())
+
+  account PaperAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@index([accountId, timestamp])
+  @@index([symbol, timestamp])
+}
+
+// ==================== SIGNAL CLASSIFICATION & FILTERING ====================
+
+// ClassifiedSignal - Store classified signals for training and tracking
+model ClassifiedSignal {
+  id String @id @default(cuid())
+
+  // Symbol info
+  symbol    String
+  direction String // LONG, SHORT
+
+  // Outcome tracking
+  outcome    String @default("PENDING") // PENDING, WIN, LOSS, BREAKEVEN
+  pnlPercent Float  @default(0)
+
+  // Classification data
+  probability Float // 0-1 confidence
+  features    String // JSON: features used for classification
+
+  // Source
+  botType String // BB, DCA, VISION, GRID, ORION, ARGUS
+
+  // Timestamps
+  timestamp  DateTime  @default(now())
+  resolvedAt DateTime?
+
+  // Relations
+  userId String?
+  user   User?   @relation(fields: [userId], references: [id])
+
+  @@index([symbol, botType, outcome])
+  @@index([timestamp])
+}
+
+// SignalFilterConfig - Store filter configurations
+model SignalFilterConfig {
+  id     String  @id @default(cuid())
+  userId String?
+
+  // Filter type
+  filterType String // ENHANCED, BB, DCA, VISION
+
+  // Configuration
+  config String // JSON: full configuration
+
+  // Performance tracking
+  totalSignals Int   @default(0)
+  winSignals   Int   @default(0)
+  winRate      Float @default(0)
+
+  // Active status
+  isActive Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([filterType, isActive])
+}
+
+// EnsembleWeights - Store dynamic ensemble weights
+model EnsembleWeights {
+  id String @id @default(cuid())
+
+  // Symbol/timeframe context
+  symbol    String
+  timeframe String @default("1h")
+
+  // Indicator weights
+  superTrend Float @default(0.3)
+  npc        Float @default(0.4)
+  squeeze    Float @default(0.3)
+
+  // Performance metrics
+  totalSignals Int   @default(0)
+  accuracy     Float @default(0)
+
+  // Last optimization
+  lastOptimized DateTime @default(now())
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([symbol, timeframe])
+}
+
+// MLModelTraining - Track ML model training
+model MLModelTraining {
+  id String @id @default(cuid())
+
+  // Model info
+  modelType String // LAWRENCE, LSTM, etc.
+  symbol    String?
+
+  // Training data
+  samplesCount Int
+  features     String // JSON: feature names
+
+  // Results
+  accuracy  Float?
+  precision Float?
+  recall    Float?
+  f1Score   Float?
+
+  // Model state
+  status String @default("PENDING") // PENDING, TRAINING, COMPLETED, FAILED
+
+  // Timestamps
+  startedAt   DateTime?
+  completedAt DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([modelType, status])
+}
+
+// ==================== ML TRAINING DATA ====================
+
+// MLTrainingSample - Individual training samples for Lawrence Classifier
+model MLTrainingSample {
+  id String @id @default(cuid())
+
+  // Sample identification
+  sourceType String // SIGNAL, TRADE, MANUAL
+  sourceId   String? // Reference to original signal/trade
+
+  // Classification data
+  direction String // LONG, SHORT, NEUTRAL
+  label     String // LONG, SHORT, NEUTRAL (actual outcome)
+
+  // Features (normalized 0-1)
+  features String // JSON: { "n_rsi": 0.6, "n_trend": 0.8, ... }
+
+  // Outcome tracking
+  pnlPercent  Float   @default(0)
+  holdingTime Int     @default(0) // seconds
+  outcome     String  @default("PENDING") // WIN, LOSS, BREAKEVEN, PENDING
+
+  // Quality metrics
+  confidence   Float @default(0.5) // Original confidence
+  mlScore      Float @default(0.5) // ML agreement score
+  qualityScore Float @default(0.5) // Overall quality
+
+  // Weight for training
+  weight Float @default(1.0)
+
+  // Context
+  symbol   String
+  exchange String @default("binance")
+  botCode  String // HFT, MFT, LFT, etc.
+
+  // Timestamps
+  signalTime  DateTime
+  resolvedAt  DateTime?
+  createdAt   DateTime @default(now())
+
+  @@index([sourceType, outcome])
+  @@index([botCode, outcome])
+  @@index([symbol, signalTime])
+}
+
+// MLEvaluationMetrics - Track model performance over time
+model MLEvaluationMetrics {
+  id String @id @default(cuid())
+
+  // Time period
+  periodStart DateTime
+  periodEnd   DateTime
+
+  // Sample counts
+  totalSamples  Int @default(0)
+  winSamples    Int @default(0)
+  lossSamples   Int @default(0)
+  pendingSamples Int @default(0)
+
+  // Accuracy metrics
+  overallAccuracy Float @default(0)
+  longAccuracy    Float @default(0)
+  shortAccuracy   Float @default(0)
+  neutralAccuracy Float @default(0)
+
+  // Performance metrics
+  precision Float @default(0)
+  recall    Float @default(0)
+  f1Score   Float @default(0)
+  
+  // Financial metrics
+  avgPnlPercent  Float @default(0)
+  avgWinPercent  Float @default(0)
+  avgLossPercent Float @default(0)
+  profitFactor   Float @default(0)
+  sharpeRatio    Float @default(0)
+  
+  // By bot breakdown
+  byBotMetrics String // JSON: { "HFT": { "accuracy": 0.65, ... }, ... }
+  
+  // By symbol breakdown
+  bySymbolMetrics String // JSON: { "BTCUSDT": { "accuracy": 0.7, ... }, ... }
+
+  createdAt DateTime @default(now())
+
+  @@unique([periodStart, periodEnd])
+  @@index([periodStart])
+}
+
+// ============================================================================
+// LOGOS SELF-LEARNING SYSTEM
+// ============================================================================
+
+// LearningTrade - Record all trades for learning
+model LearningTrade {
+  id String @id
+
+  // Source of trade
+  source     String  // 'manual', 'signal', 'bot'
+  botCode    String? // For signal/bot trades
+
+  // Trade details
+  symbol     String
+  exchange   String
+  direction  String  // 'LONG', 'SHORT'
+  entryPrice Float
+  exitPrice  Float
+  size       Float
+
+  // Results
+  pnl        Float
+  pnlPercent Float
+  duration   Int     // milliseconds
+  timestamp  DateTime
+  success    Boolean
+
+  // Context
+  marketConditions  String?  // JSON
+  signalConfidence  Float?
+  signalReason      String?
+
+  createdAt DateTime @default(now())
+
+  @@index([source])
+  @@index([botCode])
+  @@index([symbol])
+  @@index([success])
+  @@index([timestamp])
+}
+
+// BotPerformance - Track performance of each bot
+model BotPerformance {
+  id String @id @default(cuid())
+
+  botCode String @unique
+
+  // Signal counts
+  totalSignals     Int @default(0)
+  successfulSignals Int @default(0)
+  failedSignals    Int @default(0)
+  accuracy         Float @default(0)
+
+  // PnL metrics
+  avgPnl       Float @default(0)
+  avgPnlPercent Float @default(0)
+
+  // Condition analysis
+  bestConditions  String // JSON array
+  worstConditions String // JSON array
+
+  // Symbol preferences
+  preferredSymbols String // JSON array
+  avoidedSymbols   String // JSON array
+
+  lastUpdated DateTime @updatedAt
+
+  @@index([accuracy])
+}
+
+// LearningModel - Store the learning model state
+model LearningModel {
+  id String @id @default(cuid())
+
+  // Weights and preferences
+  botWeights         String // JSON: { "HFT": 0.7, "MFT": 0.5, ... }
+  symbolPreferences  String // JSON: { "BTCUSDT": ["HFT", "MFT"], ... }
+  conditionMultipliers String // JSON: { "high_volatility": 0.8, ... }
+  timePreferences    String // JSON: { "0": 0.5, "1": 0.6, ... }
+
+  totalSamples Int @default(0)
+  lastUpdated  DateTime @updatedAt
+}
+
+// ==================== ORDER FILL TRACKING ====================
+// Tracks order execution status and fills from exchanges
+
+model OrderFillTracking {
+  id String @id @default(cuid())
+
+  // Order identification
+  orderId         String   @unique // Internal order ID
+  exchangeOrderId String?  // Exchange-assigned order ID
+  clientOrderId   String?  // Client-provided order ID
+
+  // Symbol and exchange
+  symbol   String
+  exchange String // binance, bybit, okx, bitget, bingx
+
+  // Order details
+  side              String  // BUY, SELL
+  orderType         String  // MARKET, LIMIT, STOP_MARKET, STOP_LIMIT, TRAILING_STOP
+  requestedQuantity Float
+  filledQuantity    Float   @default(0)
+  remainingQuantity Float   @default(0)
+  limitPrice        Float?
+
+  // Fill information
+  avgFillPrice Float @default(0)
+  totalFees    Float @default(0)
+  feeCurrency  String @default("USDT")
+
+  // Status
+  status String @default("NEW") // NEW, SUBMITTED, PARTIALLY_FILLED, FILLED, CANCELLED, REJECTED, EXPIRED
+
+  // Fill events (JSON array of FillEvent)
+  fills String @default("[]")
+
+  // Position context
+  positionSide String? // LONG, SHORT, BOTH (for hedge mode)
+  reduceOnly   Boolean @default(false)
+  positionId   String?
+  signalId     Int?
+
+  // Demo flag
+  isDemo Boolean @default(false)
+
+  // Timestamps
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  filledAt  DateTime? // When order was fully filled
+
+  @@index([exchangeOrderId])
+  @@index([clientOrderId])
+  @@index([symbol, exchange])
+  @@index([positionId])
+  @@index([signalId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+// SignalEntryTracking - Tracks fill status for signal entry prices
+model SignalEntryTracking {
+  id String @id @default(cuid())
+
+  // Signal reference
+  signalId   Int
+  entryIndex Int // Index of the entry price in the signal
+
+  // Entry details
+  entryPrice        Float
+  requestedQuantity Float
+  filledQuantity    Float @default(0)
+  avgFillPrice      Float @default(0)
+
+  // Status
+  isFilled Boolean @default(false)
+
+  // Associated orders (JSON array of order IDs)
+  orderIds String @default("[]")
+
+  // Timestamps
+  firstFillAt  DateTime?
+  completedAt  DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([signalId, entryIndex])
+  @@index([signalId])
+  @@index([isFilled])
+}
+
+// ==================== AUTO-TRADING STATE MODELS ====================
+// State tracking for Cornix-compatible auto-trading features
+
+// TPGraceState - Tracks TP Grace retry attempts for positions
+model TPGraceState {
+  id String @id @default(cuid())
+
+  // Position reference
+  positionId String @unique
+  signalId   Int?
+
+  // TP Targets state (JSON array)
+  tpTargets String @default("[]") // JSON: [{id, price, amount, filledAmount, retryCount, status}]
+
+  // Overall state
+  totalRetries Int @default(0)
+  maxRetries   Int @default(3)
+  capPercent   Float @default(0.5) // % adjustment per retry
+  direction    String // LONG or SHORT
+  status       String @default("ACTIVE") // ACTIVE, COMPLETED, CANCELLED
+
+  // Timestamps
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  completedAt DateTime?
+
+  @@index([positionId])
+  @@index([status])
+}
+
+// TrailingState - Tracks trailing stop state for positions
+model TrailingState {
+  id String @id @default(cuid())
+
+  // Position reference
+  positionId String @unique
+  signalId   Int?
+
+  // Trailing type and config
+  trailingType String @default("BREAKEVEN") // BREAKEVEN, MOVING_TARGET, MOVING_2_TARGET, PERCENT_BELOW_TRIGGERS, PERCENT_BELOW_HIGHEST
+  triggerType  String @default("TARGET_REACHED") // TARGET_REACHED, PERCENT_ABOVE_ENTRY
+  triggerValue Float? // Target # or percentage
+
+  // State tracking
+  status           String @default("INACTIVE") // INACTIVE, TRIGGERED, ACTIVE, STOPPED
+  originalSL       Float?
+  currentSL        Float?
+  avgEntryPrice    Float
+  highestPrice     Float?
+  lowestPrice      Float?
+  triggerTargetIdx Int @default(-1)
+  lastTPPrice      Float?
+  last2TPPrice     Float?
+  trailingPercent  Float?
+
+  // Direction
+  direction String // LONG or SHORT
+
+  // Timestamps
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  activatedAt DateTime?
+
+  @@index([positionId])
+  @@index([status])
+}
+
+// FirstEntryIteration - Tracks First Entry as Market iterations
+model FirstEntryIteration {
+  id String @id @default(cuid())
+
+  // Position/Signal reference
+  positionId String?
+  signalId   Int?
+
+  // State
+  status          String @default("PENDING") // PENDING, ACTIVE, FILLED, CANCELLED, EXPIRED
+  mode            String @default("ENTRY_PRICE_REACHED") // IMMEDIATE, ENTRY_PRICE_REACHED
+  originalPrice   Float
+  currentPrice    Float
+  cappedPrice     Float
+  iterations      Int @default(0)
+  maxIterations   Int @default(200)
+  iterationStep   Float @default(0.001) // 0.1%
+  amount          Float
+  filledAmount    Float @default(0)
+  direction       String // LONG or SHORT
+
+  // Timestamps
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  lastIterationAt DateTime?
+
+  @@index([positionId])
+  @@index([signalId])
+  @@index([status])
+}
+
+// OrderExecution - Tracks order execution details
+model OrderExecution {
+  id String @id @default(cuid())
+
+  // Order reference
+  orderId         String @unique
+  exchangeOrderId String?
+  clientOrderId   String?
+
+  // Position context
+  positionId   String?
+  signalId     Int?
+  botConfigId  String?
+
+  // Order details
+  symbol       String
+  exchange     String
+  side         String // BUY, SELL
+  orderType    String // MARKET, LIMIT, STOP_LIMIT, STOP_MARKET
+  orderPurpose String // ENTRY, TP, SL, TRAILING_SL
+
+  // Amount and price
+  requestedAmount Float
+  filledAmount    Float @default(0)
+  limitPrice      Float?
+  stopPrice       Float?
+  avgFillPrice    Float @default(0)
+
+  // Trading mode
+  tradingMode String @default("PAPER") // PAPER, TESTNET, DEMO, LIVE
+
+  // Status
+  status      String @default("PENDING") // PENDING, OPEN, PARTIALLY_FILLED, FILLED, CANCELLED, REJECTED, EXPIRED
+  retryCount  Int @default(0)
+  maxRetries  Int @default(0)
+  lastError   String?
+
+  // Fees
+  totalFees   Float @default(0)
+  feeCurrency String @default("USDT")
+
+  // Timestamps
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  submittedAt DateTime?
+  filledAt    DateTime?
+
+  @@index([orderId])
+  @@index([exchangeOrderId])
+  @@index([positionId])
+  @@index([signalId])
+  @@index([status])
+}
+
+// CornixFeatureMetric - Tracks usage metrics for Cornix features
+model CornixFeatureMetric {
+  id String @id @default(cuid())
+
+  // Feature identification
+  featureName String // firstentry, tpgrace, trailing, etc.
+  command     String // The command that was executed
+
+  // Execution details
+  success     Boolean @default(true)
+  executionTime Int // milliseconds
+  errorMessage String?
+
+  // Context
+  source      String @default("ORACLE") // ORACLE, TELEGRAM, API
+  botConfigId String?
+  symbol      String?
+  exchange    String?
+
+  // Timestamps
+  createdAt DateTime @default(now())
+
+  @@index([featureName])
+  @@index([createdAt])
+  @@index([source])
+}
+
+// ExchangeConnectionStatus - Tracks exchange connection states
+model ExchangeConnectionStatus {
+  id String @id @default(cuid())
+
+  // Exchange identification
+  exchangeId String // binance, bybit, okx, bitget, bingx
+  accountId  String?
+
+  // Connection state
+  status       String @default("DISCONNECTED") // CONNECTED, DISCONNECTED, ERROR
+  tradingMode  String @default("PAPER") // PAPER, TESTNET, DEMO, LIVE
+
+  // API status
+  apiKeyValid     Boolean @default(false)
+  lastPingAt      DateTime?
+  lastError       String?
+  lastErrorAt     DateTime?
+
+  // Rate limiting
+  requestsCount   Int @default(0)
+  requestsLimit   Int @default(1200)
+  resetAt         DateTime?
+
+  // Timestamps
+  connectedAt DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([exchangeId, accountId])
+  @@index([exchangeId])
+  @@index([status])
+}

@@ -1,0 +1,50 @@
+{
+  "name": "Vision Basic",
+  "description": "Базовая стратегия на основе Market Forecast. Торговля на основе прогноза направления рынка с умеренным риск-профилем.",
+  "category": "vision",
+  "botType": "VISION",
+  "version": "1.0.0",
+  "author": "CITARION",
+  "tags": ["forecast", "ai", "moderate", "automated"],
+  "config": {
+    "symbol": "BTC/USDT",
+    "direction": "BOTH",
+    "leverage": 5,
+    "marginMode": "ISOLATED",
+    "tradeAmount": 100,
+    "useForecast": true,
+    "confidenceThreshold": 0.7,
+    "riskProfile": "normal",
+    "strategy": "basic",
+    "stopLoss": 5,
+    "takeProfit": 10,
+    "trailingStop": null,
+    "cryptoSymbols": ["BTC/USDT"],
+    "stockIndices": [],
+    "goldSymbol": "GC=F",
+    "timeframe": "1h",
+    "lookbackDays": 30,
+    "volatilityLow": 0.01,
+    "volatilityHigh": 0.05,
+    "trendThreshold": 0.02,
+    "correlationWeight": 0.30,
+    "tradingEnabled": false,
+    "tradingFee": 0.001,
+    "initialCapital": 10000,
+    "forecastIntervalMinutes": 60,
+    "tradingCycleHours": 24,
+    "telegramEnabled": false
+  },
+  "defaultParams": {
+    "tradeAmountRange": [50, 500],
+    "leverageRange": [1, 15],
+    "confidenceThresholdRange": [0.5, 0.9]
+  },
+  "riskProfile": "moderate",
+  "recommendedFor": {
+    "marketCondition": "any",
+    "volatility": "any",
+    "timeframe": "1h-4h"
+  },
+  "notes": "Начните с tradingEnabled=false для режима сигналов. Включите торговлю только после проверки прогнозов."
+}

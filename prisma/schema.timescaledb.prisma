@@ -1,0 +1,1018 @@
+// This is your Prisma schema file for PostgreSQL with TimescaleDB
+// Use this file when deploying to production with TimescaleDB
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ==================== USER MANAGEMENT ====================
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  name         String?
+  password     String?
+  image        String?
+  currentMode  String   @default("DEMO")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  
+  accounts     Account[]
+  trades       Trade[]
+  botConfigs   BotConfig[]
+  sessions     Session[]
+
+  @@map("users")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token        String   @unique
+  expiresAt    DateTime
+  createdAt    DateTime @default(now())
+
+  @@map("sessions")
+}
+
+// ==================== ACCOUNT MANAGEMENT ====================
+
+model Account {
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  accountType   String   @default("DEMO")
+  exchangeId    String   @default("binance")
+  exchangeType  String   @default("spot")
+  exchangeName  String   @default("Binance")
+  
+  apiKey        String?
+  apiSecret     String?
+  apiPassphrase String?
+  apiUid        String?
+  
+  subAccount    String?
+  isTestnet     Boolean  @default(false)
+  virtualBalance String?
+  isActive      Boolean  @default(true)
+  lastSyncAt    DateTime?
+  lastError     String?
+  
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  
+  trades        Trade[]
+  positions     Position[]
+  botConfigs    BotConfig[]
+  gridBots      GridBot[]
+  dcaBots       DcaBot[]
+  bbBots        BBBot[]
+  escortRequests     EscortRequest[]
+  externalPositions  ExternalPosition[]
+  pendingRequests    PendingPositionRequest[]
+  
+  @@unique([userId, exchangeId, exchangeType])
+  @@map("accounts")
+}
+
+// ==================== TRADING ====================
+
+model Trade {
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accountId     String
+  account       Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  
+  symbol        String
+  direction     String
+  status        String   @default("PENDING")
+  
+  entryPrice    Float?
+  entryTime     DateTime?
+  amount        Float
+  leverage      Int      @default(1)
+  
+  exitPrice     Float?
+  exitTime      DateTime?
+  closeReason   String?
+  
+  stopLoss      Float?
+  takeProfits   String?
+  
+  pnl           Float    @default(0)
+  pnlPercent    Float    @default(0)
+  fee           Float    @default(0)
+  
+  signalSource  String?
+  signalId      String?
+  
+  isDemo        Boolean  @default(true)
+  
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  
+  position      Position? @relation(fields: [positionId], references: [id])
+  positionId    String? @unique
+
+  @@map("trades")
+}
+
+model Position {
+  id            String   @id @default(cuid())
+  accountId     String
+  account       Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  
+  symbol        String
+  direction     String
+  status        String   @default("OPEN")
+  
+  totalAmount   Float
+  filledAmount  Float    @default(0)
+  avgEntryPrice Float
+  currentPrice  Float?
+  leverage      Int      @default(1)
+  
+  source        String   @default("PLATFORM")
+  exchangePositionId String?
+  
+  escortEnabled Boolean  @default(false)
+  escortStatus  String?
+  
+  stopLoss      Float?
+  takeProfit    Float?
+  trailingStop  String?
+  trailingActivated Boolean @default(false)
+  
+  unrealizedPnl Float    @default(0)
+  realizedPnl   Float    @default(0)
+  
+  totalFundingPaid     Float    @default(0)
+  totalFundingReceived Float    @default(0)
+  lastFundingTime      DateTime?
+  
+  openFee       Float    @default(0)
+  closeFee      Float    @default(0)
+  
+  highestPrice  Float?
+  lowestPrice   Float?
+  
+  isDemo        Boolean  @default(true)
+  closedAt      DateTime?
+  closeReason   String?
+  
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  
+  trades        Trade[]
+  fundingPayments FundingPayment[]
+  Signal        Signal?
+  escortRequest EscortRequest?
+  
+  @@index([source, escortStatus])
+  @@index([accountId, status])
+  @@map("positions")
+}
+
+// ==================== ESCORT REQUEST ====================
+
+model EscortRequest {
+  id            String   @id @default(cuid())
+  accountId     String
+  account       Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  
+  symbol        String
+  direction     String
+  size          Float
+  entryPrice    Float
+  leverage      Int      @default(1)
+  
+  exchange      String
+  marketType    String
+  exchangePositionId String?
+  
+  status        String   @default("PENDING")
+  
+  createdAt     DateTime @default(now())
+  respondedAt   DateTime?
+  
+  positionId    String? @unique
+  position      Position? @relation(fields: [positionId], references: [id])
+  
+  @@index([accountId, status])
+  @@index([status, createdAt])
+  @@map("escort_requests")
+}
+
+// ==================== SIGNAL ID COUNTER ====================
+
+model SignalIdCounter {
+  id          String   @id @default("signal_counter")
+  lastId      Int      @default(0)
+  updatedAt   DateTime @updatedAt
+
+  @@map("signal_id_counters")
+}
+
+// ==================== SIGNAL PARSING ====================
+
+model Signal {
+  id            String   @id @default(cuid())
+  userId        String?
+  
+  signalId      Int      @unique
+  
+  source        String
+  sourceChannel String?
+  sourceMessage String?
+  
+  symbol        String
+  direction     String
+  action        String
+  marketType    String   @default("FUTURES")
+  
+  entryPrices   String?
+  entryZone     String?
+  entryWeights  String?
+  
+  takeProfits   String?
+  stopLoss      Float?
+  
+  leverage      Int      @default(1)
+  leverageType  String   @default("ISOLATED")
+  signalType    String   @default("REGULAR")
+  
+  trailingConfig String?
+  
+  amountPerTrade Float?
+  riskPercentage Float?
+  
+  exchanges     String?
+  
+  status        String   @default("PENDING")
+  errorMessage  String?
+  processedAt   DateTime?
+  closedAt      DateTime?
+  closeReason   String?
+  
+  executedTrades String?
+  
+  positionId    String? @unique
+  position      Position? @relation(fields: [positionId], references: [id])
+  
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  
+  @@index([signalId])
+  @@index([symbol, marketType, status])
+  @@map("signals")
+}
+
+// ==================== OHLCV CANDLE DATA (TimescaleDB) ====================
+
+model OhlcvCandle {
+  id            String   @id @default(cuid())
+  
+  symbol        String
+  exchange      String   @default("binance")
+  marketType    String   @default("futures")
+  
+  timeframe     String
+  openTime      DateTime
+  closeTime     DateTime
+  
+  open          Float
+  high          Float
+  low           Float
+  close         Float
+  volume        Float
+  
+  quoteVolume   Float?
+  trades        Int?
+  takerBuyVolume Float?
+  takerBuyQuoteVolume Float?
+  
+  isFinal       Boolean  @default(true)
+  
+  createdAt     DateTime @default(now())
+  
+  @@unique([symbol, exchange, timeframe, openTime])
+  @@index([symbol, exchange, timeframe, openTime])
+  @@index([exchange, openTime])
+  @@map("ohlcv_candles")
+}
+
+// ==================== EXCHANGE SYNC STATUS ====================
+
+model ExchangeSyncStatus {
+  id            String   @id @default(cuid())
+  
+  exchange      String
+  symbol        String
+  marketType    String   @default("futures")
+  timeframe     String   @default("1h")
+  
+  lastSyncTime  DateTime?
+  lastCandleTime DateTime?
+  candlesCount  Int      @default(0)
+  isSyncing     Boolean  @default(false)
+  lastError     String?
+  
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  
+  @@unique([exchange, symbol, marketType, timeframe])
+  @@map("exchange_sync_statuses")
+}
+
+// ==================== FUNDING RATE HISTORY ====================
+
+model FundingRateHistory {
+  id            String   @id @default(cuid())
+  
+  symbol        String
+  exchange      String   @default("binance")
+  
+  fundingRate   Float
+  fundingTime   DateTime
+  markPrice     Float?
+  indexPrice    Float?
+  
+  createdAt     DateTime @default(now())
+  
+  @@index([symbol, exchange, fundingTime])
+  @@map("funding_rate_history")
+}
+
+// ==================== PNL HISTORY ====================
+
+model PnLHistory {
+  id            String   @id @default(cuid())
+  userId        String
+  
+  timestamp     DateTime @default(now())
+  
+  isDemo        Boolean  @default(true)
+  
+  balance       Float
+  equity        Float
+  
+  realizedPnL   Float    @default(0)
+  unrealizedPnL Float    @default(0)
+  fundingPnL    Float    @default(0)
+  feesPaid      Float    @default(0)
+  
+  tradesCount   Int      @default(0)
+  winsCount     Int      @default(0)
+  lossesCount   Int      @default(0)
+  
+  createdAt     DateTime @default(now())
+  
+  @@index([userId, isDemo, timestamp])
+  @@map("pnl_history")
+}
+
+// ==================== BOT CONFIGURATION ====================
+
+model BotConfig {
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accountId     String?
+  account       Account? @relation(fields: [accountId], references: [id])
+  
+  name          String
+  description   String?
+  isActive      Boolean  @default(false)
+  
+  exchangeId    String   @default("binance")
+  exchangeType  String   @default("futures")
+  
+  tradeAmount   Float    @default(100)
+  amountType    String   @default("FIXED")
+  amountOverride Boolean @default(false)
+  
+  closeOnTPSLBeforeEntry Boolean @default(true)
+  firstEntryGracePercent Float  @default(0)
+  
+  trailingEnabled     Boolean  @default(false)
+  trailingType        String?  @default("BREAKEVEN")
+  trailingValue       Float?
+  trailingTriggerType String?
+  trailingTriggerValue Float?
+  trailingStopPercent  Float?
+  
+  entryStrategy       String   @default("EVENLY_DIVIDED")
+  entryWeights        String?
+  entryZoneTargets    Int      @default(1)
+  
+  tpStrategy          String   @default("ONE_TARGET")
+  tpTargetCount       Int      @default(1)
+  tpCustomRatios      String?
+  
+  defaultStopLoss     Float?
+  slTimeout           Int      @default(0)
+  slTimeoutUnit       String   @default("SECONDS")
+  slOrderType         String   @default("MARKET")
+  
+  leverage            Int      @default(1)
+  leverageOverride    Boolean  @default(false)
+  hedgeMode           Boolean  @default(false)
+  marginMode          String   @default("ISOLATED")
+  
+  maxOpenTrades       Int      @default(5)
+  minTradeInterval    Int      @default(5)
+  allowedSymbols      String?
+  blacklistedSymbols  String?
+  
+  signalSources       String?
+  ignoreSignalsWithoutSL Boolean @default(false)
+  ignoreSignalsWithoutTP Boolean @default(false)
+  minRiskRewardRatio  Float?
+  
+  autoExecuteEnabled  Boolean  @default(false)
+  autoExecuteSources  String?
+  autoExecuteRequiresConfirmation Boolean @default(true)
+  
+  spotMakerFee        Float    @default(0.001)
+  spotTakerFee        Float    @default(0.001)
+  futuresMakerFee     Float    @default(0.0002)
+  futuresTakerFee     Float    @default(0.0004)
+  slippagePercent     Float    @default(0.0005)
+  useCustomFees       Boolean  @default(false)
+  
+  notifyOnEntry       Boolean  @default(true)
+  notifyOnExit        Boolean  @default(true)
+  notifyOnSL          Boolean  @default(true)
+  notifyOnTP          Boolean  @default(true)
+  notifyOnError       Boolean  @default(true)
+  notifyOnNewSignal   Boolean  @default(true)
+  
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@map("bot_configs")
+}
+
+// ==================== GRID BOT ====================
+
+model GridBot {
+  id            String   @id @default(cuid())
+  userId        String
+  accountId     String
+  account       Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  
+  name          String
+  description   String?
+  isActive      Boolean  @default(false)
+  
+  symbol        String
+  exchangeId    String   @default("binance")
+  direction     String   @default("LONG")
+  
+  gridType      String   @default("ARITHMETIC")
+  gridCount     Int      @default(10)
+  
+  upperPrice    Float
+  lowerPrice    Float
+  
+  totalInvestment Float
+  perGridAmount   Float?
+  
+  leverage      Int      @default(1)
+  marginMode    String   @default("ISOLATED")
+  
+  takeProfit    Float?
+  stopLoss      Float?
+  
+  triggerPrice  Float?
+  triggerType   String?
+  
+  levels        String?
+  
+  status        String   @default("STOPPED")
+  startedAt     DateTime?
+  stoppedAt     DateTime?
+  
+  totalProfit   Float    @default(0)
+  totalTrades   Int      @default(0)
+  realizedPnL   Float    @default(0)
+  
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  
+  gridOrders    GridOrder[]
+  
+  @@index([userId, isActive])
+  @@index([symbol, exchangeId, isActive])
+  @@map("grid_bots")
+}
+
+model GridOrder {
+  id            String   @id @default(cuid())
+  gridBotId     String
+  gridBot       GridBot  @relation(fields: [gridBotId], references: [id], onDelete: Cascade)
+  
+  gridLevel     Int
+  price         Float
+  
+  side          String
+  status        String   @default("PENDING")
+  
+  amount        Float
+  filled        Float    @default(0)
+  
+  exchangeOrderId String?
+  
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  filledAt      DateTime?
+  
+  @@index([gridBotId, status])
+  @@index([gridBotId, gridLevel])
+  @@map("grid_orders")
+}
+
+// ==================== DCA BOT ====================
+
+model DcaBot {
+  id            String   @id @default(cuid())
+  userId        String
+  accountId     String
+  account       Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  
+  name          String
+  description   String?
+  isActive      Boolean  @default(false)
+  
+  symbol        String
+  exchangeId    String   @default("binance")
+  
+  direction     String   @default("LONG")
+  
+  entryType     String   @default("MARKET")
+  entryPrice    Float?
+  baseAmount    Float
+  
+  dcaLevels     Int      @default(5)
+  dcaPercent    Float    @default(5)
+  dcaMultiplier Float    @default(1.5)
+  
+  dcaCustomLevels String?
+  
+  tpType        String   @default("PERCENT")
+  tpValue       Float    @default(10)
+  tpSellBase    Boolean  @default(false)
+  
+  slEnabled     Boolean  @default(false)
+  slType        String   @default("PERCENT")
+  slValue       Float?
+  
+  leverage      Int      @default(1)
+  marginMode    String   @default("ISOLATED")
+  
+  trailingEnabled Boolean @default(false)
+  trailingPercent Float?
+  
+  status        String   @default("STOPPED")
+  startedAt     DateTime?
+  stoppedAt     DateTime?
+  
+  totalInvested Float    @default(0)
+  totalAmount   Float    @default(0)
+  avgEntryPrice Float?
+  currentLevel  Int      @default(0)
+  
+  realizedPnL   Float    @default(0)
+  totalTrades   Int      @default(0)
+  
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  
+  dcaOrders     DcaOrder[]
+  
+  @@index([userId, isActive])
+  @@index([symbol, exchangeId, isActive])
+  @@map("dca_bots")
+}
+
+model DcaOrder {
+  id            String   @id @default(cuid())
+  dcaBotId      String
+  dcaBot        DcaBot   @relation(fields: [dcaBotId], references: [id], onDelete: Cascade)
+  
+  dcaLevel      Int
+  price         Float?
+  
+  side          String
+  orderType     String   @default("MARKET")
+  status        String   @default("PENDING")
+  
+  amount        Float
+  quantity      Float    @default(0)
+  filled        Float    @default(0)
+  
+  exchangeOrderId String?
+  
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  filledAt      DateTime?
+  
+  @@index([dcaBotId, status])
+  @@index([dcaBotId, dcaLevel])
+  @@map("dca_orders")
+}
+
+// ==================== BB BOT ====================
+
+model BBBot {
+  id            String   @id @default(cuid())
+  userId        String
+  accountId     String
+  account       Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  
+  name          String
+  description   String?
+  isActive      Boolean  @default(false)
+  
+  symbol        String
+  exchangeId    String   @default("binance")
+  
+  marketType    String   @default("FUTURES")
+  timeframes    String   @default("[\"15m\"]")
+  
+  direction     String   @default("BOTH")
+  tradeAmount   Float    @default(100)
+  leverage      Int      @default(1)
+  marginMode    String   @default("ISOLATED")
+  
+  stopLoss      Float?
+  takeProfit    Float?
+  trailingStop  Float?
+  
+  isManualMode  Boolean  @default(false)
+  manualEntryPrice Float?
+  manualTargets    String?
+  manualStopLoss   Float?
+  
+  status        String   @default("STOPPED")
+  startedAt     DateTime?
+  stoppedAt     DateTime?
+  
+  totalProfit   Float    @default(0)
+  totalTrades   Int      @default(0)
+  winTrades     Int      @default(0)
+  lossTrades    Int      @default(0)
+  realizedPnL   Float    @default(0)
+  
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  
+  timeframeConfigs BBotTimeframeConfig[]
+  
+  @@index([userId, isActive])
+  @@index([symbol, exchangeId, isActive])
+  @@map("bb_bots")
+}
+
+model BBotTimeframeConfig {
+  id            String   @id @default(cuid())
+  bbBotId       String
+  bbBot         BBBot    @relation(fields: [bbBotId], references: [id], onDelete: Cascade)
+  
+  timeframe     String
+  
+  bbEnabled     Boolean  @default(true)
+  bbInnerPeriod    Int      @default(20)
+  bbInnerDeviation Float    @default(1.0)
+  bbOuterPeriod    Int      @default(20)
+  bbOuterDeviation Float    @default(2.0)
+  bbSource      String   @default("close")
+  
+  stochEnabled     Boolean  @default(true)
+  stochKPeriod     Int      @default(14)
+  stochDPeriod     Int      @default(3)
+  stochSlowing     Int      @default(3)
+  stochOverbought  Int      @default(80)
+  stochOversold    Int      @default(20)
+  
+  emaEnabled    Boolean  @default(false)
+  emaPeriod     Int      @default(20)
+  emaSource     String   @default("close")
+  
+  smaEnabled    Boolean  @default(false)
+  smaPeriod     Int      @default(50)
+  smaSource     String   @default("close")
+  
+  smmaEnabled   Boolean  @default(false)
+  smmaPeriod    Int      @default(20)
+  smmaSource    String   @default("close")
+  
+  bbValues      String?
+  stochValues   String?
+  maValues      String?
+  
+  lastUpdate    DateTime?
+  
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  
+  @@unique([bbBotId, timeframe])
+  @@index([bbBotId, timeframe])
+  @@map("bbot_timeframe_configs")
+}
+
+// ==================== ARGUS BOT ====================
+
+model ArgusBot {
+  id            String   @id @default(cuid())
+  userId        String
+  name          String
+  
+  status        String   @default("ACTIVE")
+  
+  exchange      String   @default("bingx")
+  accountId     String?
+  
+  enable5Long   Boolean  @default(true)
+  enable5Short  Boolean  @default(true)
+  enable12Long  Boolean  @default(true)
+  enable12Short Boolean  @default(true)
+  
+  pumpThreshold5m   Float @default(0.05)
+  pumpThreshold15m  Float @default(0.10)
+  dumpThreshold5m   Float @default(-0.05)
+  dumpThreshold15m  Float @default(-0.10)
+  
+  maxMarketCap  Float    @default(100000000)
+  minMarketCap  Float    @default(1000000)
+  
+  useImbalanceFilter Boolean @default(false)
+  imbalanceThreshold Float   @default(0.2)
+  
+  leverage      Int      @default(10)
+  positionSize  Float    @default(50)
+  stopLoss5     Float    @default(0.05)
+  stopLoss12    Float    @default(0.12)
+  takeProfit5   String   @default("[0.05, 0.10, 0.15]")
+  takeProfit12  String   @default("[0.12, 0.18, 0.25]")
+  
+  useTrailing       Boolean @default(false)
+  trailingActivation5  Float @default(0.03)
+  trailingActivation12 Float @default(0.06)
+  trailingDistance5    Float @default(0.015)
+  trailingDistance12   Float @default(0.03)
+  
+  cooldownMinutes Int   @default(30)
+  
+  notifyOnSignal Boolean @default(true)
+  notifyOnTrade  Boolean @default(true)
+  
+  useMarketForecast    Boolean @default(false)
+  forecastBoostSignals Boolean @default(true)
+  forecastWeight       Float  @default(0.3)
+  forecastConfirmOnly  Boolean @default(false)
+  forecastRiskProfile  String @default("normal")
+  forecastStrategy     String @default("basic")
+  
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@map("argus_bots")
+}
+
+// ==================== OTHER MODELS ====================
+// (Additional models would follow the same pattern)
+
+model FundingPayment {
+  id            String   @id @default(cuid())
+  positionId    String
+  position      Position @relation(fields: [positionId], references: [id], onDelete: Cascade)
+  
+  symbol        String
+  direction     String
+  quantity      Float
+  fundingRate   Float
+  payment       Float
+  
+  fundingTime   DateTime
+  createdAt     DateTime @default(now())
+  
+  @@index([positionId])
+  @@index([symbol, fundingTime])
+  @@map("funding_payments")
+}
+
+model ExternalPosition {
+  id              String   @id @default(cuid())
+  accountId       String
+  account         Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  
+  exchangeId      String
+  exchangeType    String
+  
+  exchangePositionId String?
+  symbol          String
+  
+  direction       String
+  status          String   @default("DETECTED")
+  
+  amount          Float
+  amountUsd       Float
+  avgEntryPrice   Float
+  currentPrice    Float?
+  leverage        Int      @default(1)
+  
+  unrealizedPnl   Float?
+  unrealizedPnlPercent Float?
+  
+  stopLoss        Float?
+  takeProfit      Float?
+  trailingStop    String?
+  
+  positionId      String?
+  
+  detectedAt      DateTime @default(now())
+  lastSyncAt      DateTime?
+  
+  userResponded   Boolean  @default(false)
+  userResponse    String?
+  respondedAt     DateTime?
+  
+  telegramMessageId String?
+  notifiedAt      DateTime?
+  
+  closedAt        DateTime?
+  closeReason     String?
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  @@unique([accountId, symbol, direction, status])
+  @@index([accountId, status])
+  @@index([status, detectedAt])
+  @@map("external_positions")
+}
+
+model PendingPositionRequest {
+  id              String   @id @default(cuid())
+  accountId       String
+  account         Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  
+  exchange        String
+  marketType      String
+  
+  symbol          String
+  direction       String
+  size            Float
+  entryPrice      Float
+  currentPrice    Float
+  leverage        Int      @default(1)
+  unrealizedPnl   Float    @default(0)
+  
+  stopLoss        Float?
+  takeProfit      Float?
+  liquidationPrice Float?
+  
+  status          String   @default("PENDING")
+  
+  expiresAt       DateTime
+  
+  telegramMessageId String?
+  telegramChatId   String?
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  respondedAt     DateTime?
+  
+  positionId      String?
+  
+  @@index([accountId, status])
+  @@index([status, expiresAt])
+  @@unique([accountId, symbol, direction, status])
+  @@map("pending_position_requests")
+}
+
+model DailyStats {
+  id            String   @id @default(cuid())
+  
+  symbol        String
+  exchange      String   @default("binance")
+  
+  date          DateTime
+  
+  open          Float
+  high          Float
+  low           Float
+  close         Float
+  
+  volume        Float
+  quoteVolume   Float
+  trades        Int
+  
+  avgFundingRate Float?
+  totalFunding   Float?
+  fundingCount   Int     @default(0)
+  
+  volatility    Float?
+  priceChangePercent Float?
+  
+  createdAt     DateTime @default(now())
+  
+  @@unique([symbol, exchange, date])
+  @@index([symbol, exchange, date])
+  @@map("daily_stats")
+}
+
+model MarketSettings {
+  id            String   @id @default(cuid())
+  userId        String?
+  
+  selectedPairs String   @default("[]")
+  
+  showExchangeColumn Boolean @default(true)
+  show24hChange      Boolean @default(true)
+  showVolume         Boolean @default(false)
+  
+  sortBy        String   @default("symbol")
+  sortDirection String   @default("asc")
+  
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@map("market_settings")
+}
+
+model MarketPrice {
+  id            String   @id @default(cuid())
+  symbol        String   @unique
+  exchange      String   @default("BINANCE")
+  
+  price         Float
+  bidPrice      Float?
+  askPrice      Float?
+  high24h       Float?
+  low24h        Float?
+  volume24h     Float?
+  priceChangePercent Float?
+  
+  lastUpdate    DateTime @default(now())
+
+  @@map("market_prices")
+}
+
+model SystemLog {
+  id            String   @id @default(cuid())
+  level         String
+  category      String
+  
+  message       String
+  details       String?
+  
+  userId        String?
+  tradeId       String?
+  
+  createdAt     DateTime @default(now())
+
+  @@map("system_logs")
+}
+
+model TradingViewWebhookLog {
+  id            String   @id @default(cuid())
+  
+  rawPayload    String
+  contentType   String?
+  
+  symbol        String?
+  action        String?
+  direction     String?
+  price         Float?
+  stopLoss      Float?
+  takeProfit    Float?
+  takeProfits   String?
+  leverage      Int?
+  
+  status        String   @default("RECEIVED")
+  parseError    String?
+  confidence    Float?
+  
+  tradeId       String?
+  errorMessage  String?
+  
+  ipAddress     String?
+  userAgent     String?
+  
+  userId        String?
+  
+  createdAt     DateTime @default(now())
+  processedAt   DateTime?
+
+  @@map("tradingview_webhook_logs")
+}

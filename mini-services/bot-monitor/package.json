@@ -1,0 +1,12 @@
+{
+  "name": "bot-monitor-service",
+  "version": "1.0.0",
+  "description": "WebSocket service for real-time bot monitoring",
+  "main": "index.ts",
+  "scripts": {
+    "dev": "bun --hot index.ts"
+  },
+  "dependencies": {
+    "socket.io": "^4.7.2"
+  }
+}

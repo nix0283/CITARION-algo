@@ -1,0 +1,41 @@
+# ML Service Configuration
+service:
+  name: ml-service
+  port: 3006
+  host: "0.0.0.0"
+
+models:
+  price_predictor:
+    sequence_length: 60
+    features: 20
+    hidden_units: 128
+    num_layers: 2
+    dropout: 0.2
+    prediction_horizons: [1, 5, 15, 60]
+  
+  signal_classifier:
+    n_estimators: 200
+    max_depth: 6
+    learning_rate: 0.1
+    min_samples_split: 10
+    min_samples_leaf: 5
+  
+  regime_detector:
+    n_regimes: 3
+    covariance_type: full
+    n_iter: 100
+
+training:
+  validation_split: 0.2
+  epochs: 100
+  batch_size: 32
+  early_stopping_patience: 10
+  cross_validate: true
+
+storage:
+  models_path: ./models
+  logs_path: ./logs
+
+logging:
+  level: INFO
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"

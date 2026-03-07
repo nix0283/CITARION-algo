@@ -1,0 +1,37 @@
+{
+  "name": "DCA Conservative",
+  "description": "Консервативная DCA стратегия с 2 уровнями докупки по 5% падения. Минимум риска, подходит для новичков.",
+  "category": "dca",
+  "botType": "DCA",
+  "version": "1.0.0",
+  "author": "CITARION",
+  "tags": ["conservative", "low-risk", "spot", "beginner"],
+  "config": {
+    "direction": "LONG",
+    "entryType": "LIMIT",
+    "baseAmount": 100,
+    "dcaLevels": 2,
+    "dcaPercent": 5,
+    "dcaMultiplier": 1.0,
+    "tpType": "PERCENT",
+    "tpValue": 10,
+    "slEnabled": true,
+    "slType": "PERCENT",
+    "slValue": 15,
+    "trailingEnabled": false,
+    "leverage": 1,
+    "marginMode": "ISOLATED"
+  },
+  "defaultParams": {
+    "baseAmountRange": [50, 500],
+    "dcaLevelsRange": [1, 4],
+    "dcaPercentRange": [3, 8]
+  },
+  "riskProfile": "conservative",
+  "recommendedFor": {
+    "marketCondition": "any",
+    "volatility": "low-medium",
+    "timeframe": "4h-1d"
+  },
+  "notes": "Консервативный подход с фиксированным размером позиций. Идеально для начала работы с DCA стратегией."
+}

@@ -1,0 +1,67 @@
+{
+  "name": "BB Trend Follow",
+  "description": "Трендовая стратегия на полосах Боллинджера. Вход при пробое средней полосы с подтверждающими сигналами стохастика.",
+  "category": "bb",
+  "botType": "BB",
+  "version": "1.0.0",
+  "author": "CITARION",
+  "tags": ["trend", "breakout", "momentum", "advanced"],
+  "config": {
+    "marketType": "FUTURES",
+    "direction": "BOTH",
+    "timeframes": ["1h", "4h"],
+    "tradeAmount": 150,
+    "leverage": 5,
+    "marginMode": "ISOLATED",
+    "stopLoss": 4,
+    "takeProfit": 8,
+    "trailingStop": 3,
+    "isManualMode": false,
+    "timeframeConfigs": [
+      {
+        "timeframe": "1h",
+        "bbEnabled": true,
+        "bbInnerPeriod": 20,
+        "bbInnerDeviation": 1.0,
+        "bbOuterPeriod": 20,
+        "bbOuterDeviation": 2.0,
+        "stochEnabled": true,
+        "stochKPeriod": 14,
+        "stochDPeriod": 3,
+        "stochSlowing": 3,
+        "stochOverbought": 75,
+        "stochOversold": 25,
+        "emaEnabled": true,
+        "emaPeriod": 20,
+        "smaEnabled": true,
+        "smaPeriod": 50
+      },
+      {
+        "timeframe": "4h",
+        "bbEnabled": true,
+        "bbInnerPeriod": 20,
+        "bbInnerDeviation": 1.0,
+        "bbOuterPeriod": 20,
+        "bbOuterDeviation": 2.0,
+        "stochEnabled": false,
+        "emaEnabled": true,
+        "emaPeriod": 50,
+        "smaEnabled": true,
+        "smaPeriod": 100
+      }
+    ]
+  },
+  "defaultParams": {
+    "tradeAmountRange": [50, 500],
+    "leverageRange": [3, 15],
+    "stopLossRange": [3, 10],
+    "takeProfitRange": [5, 20]
+  },
+  "riskProfile": "aggressive",
+  "recommendedFor": {
+    "marketCondition": "trending",
+    "volatility": "medium-high",
+    "timeframe": "1h-4h"
+  },
+  "notes": "Используйте два таймфрейма для подтверждения тренда. Входите в позицию при пробое средней полосы BB с подтверждением от EMA."
+}

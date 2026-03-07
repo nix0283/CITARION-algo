@@ -1,0 +1,47 @@
+# Prometheus Configuration for CITARION
+# Scrapes metrics from the CITARION application
+
+global:
+  scrape_interval: 30s      # How often to scrape targets
+  evaluation_interval: 30s  # How often to evaluate rules
+  external_labels:
+    monitor: 'citarion-monitor'
+
+# Alertmanager configuration (optional)
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+          - alertmanager:9093
+      scheme: http
+
+# Rule files
+rule_files:
+  - /etc/prometheus/alerts.yml
+
+# Scrape configurations
+scrape_configs:
+  # CITARION Application Metrics
+  - job_name: 'citarion'
+    static_configs:
+      - targets: ['host.docker.internal:3000']
+    metrics_path: '/api/metrics'
+    scrape_interval: 30s
+    scrape_timeout: 10s
+    
+  # Prometheus self-monitoring
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+    scrape_interval: 30s
+
+  # Node Exporter (optional - for system metrics)
+  - job_name: 'node'
+    static_configs:
+      - targets: ['node-exporter:9100']
+    scrape_interval: 30s
+    # Only scrape if node-exporter is running
+    relabel_configs:
+      - source_labels: [__address__]
+        action: drop
+        regex: 'node-exporter:9100'

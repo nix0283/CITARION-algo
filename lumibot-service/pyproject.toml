@@ -1,0 +1,20 @@
+[project]
+name = "citarion-lumibot-service"
+version = "1.0.0"
+description = "Lumibot Trading Service for CITARION Platform"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+
+[tool.black]
+line-length = 100
+target-version = ['py310']
+
+[tool.ruff]
+line-length = 100
+select = ["E", "F", "W", "I", "N", "UP", "B", "C4"]
+
+[tool.mypy]
+python_version = "3.10"
+warn_return_any = true
+warn_unused_configs = true

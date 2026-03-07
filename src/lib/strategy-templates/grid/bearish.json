@@ -1,0 +1,31 @@
+{
+  "name": "Grid Bearish",
+  "description": "Медвежья сеточная стратегия для падающего рынка. Фокусируется на коротких позициях с усреднением вверх.",
+  "category": "grid",
+  "botType": "GRID",
+  "version": "1.0.0",
+  "author": "CITARION",
+  "tags": ["bearish", "trend", "short", "futures"],
+  "config": {
+    "gridType": "GEOMETRIC",
+    "gridCount": 15,
+    "direction": "SHORT",
+    "leverage": 10,
+    "marginMode": "ISOLATED",
+    "takeProfitPercent": 20,
+    "stopLossPercent": 8,
+    "triggerType": null
+  },
+  "defaultParams": {
+    "gridCountRange": [10, 30],
+    "leverageRange": [5, 20],
+    "priceRangePercent": 15
+  },
+  "riskProfile": "aggressive",
+  "recommendedFor": {
+    "marketCondition": "downtrend",
+    "volatility": "medium-high",
+    "timeframe": "4h-1d"
+  },
+  "notes": "Идеально для медвежьих рынков. Установите верхнюю границу сетки выше текущей цены для усреднения шорт позиции."
+}

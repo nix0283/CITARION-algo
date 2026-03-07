@@ -1,0 +1,31 @@
+{
+  "name": "Grid Neutral",
+  "description": "Нейтральная сеточная стратегия для бокового рынка. Подходит для торговли в диапазоне с высокой волатильностью.",
+  "category": "grid",
+  "botType": "GRID",
+  "version": "1.0.0",
+  "author": "CITARION",
+  "tags": ["neutral", "sideways", "range", "futures"],
+  "config": {
+    "gridType": "ARITHMETIC",
+    "gridCount": 10,
+    "direction": "LONG",
+    "leverage": 5,
+    "marginMode": "ISOLATED",
+    "takeProfitPercent": 15,
+    "stopLossPercent": 10,
+    "triggerType": null
+  },
+  "defaultParams": {
+    "gridCountRange": [5, 50],
+    "leverageRange": [1, 20],
+    "priceRangePercent": 10
+  },
+  "riskProfile": "moderate",
+  "recommendedFor": {
+    "marketCondition": "sideways",
+    "volatility": "medium",
+    "timeframe": "1h-4h"
+  },
+  "notes": "Используйте эту стратегию, когда рынок находится в боковом движении. Установите upper и lower price на основе поддержки/сопротивления."
+}
