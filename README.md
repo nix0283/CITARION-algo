@@ -560,7 +560,21 @@ Contributions are welcome! Please read our contributing guidelines before submit
 
 ## 📋 Recent Updates
 
-### Risk Management Integration (Latest)
+### Oracle Chat System (Latest)
+- ✅ **WebSocket Chat Service** (port 3005) - Two-way real-time communication
+- ✅ **Telegram Bot Service** (port 3006) - Standalone bot with polling
+- ✅ **Cornix API Integration** - Direct connection with API key
+- ✅ **Real Trading via Chat** - Execute signals on exchanges
+- ✅ **External Position Discovery** - 60-second polling for new positions
+- ✅ **Risk Management Integration** - 30-second alerts in chat
+- ✅ **Signal Parsing** - Cornix-compatible format
+- ✅ **Command Handling** - help, positions, close all, sync, status
+- ✅ **External Position Escort** - Accept/ignore detected positions
+- ✅ **Mode Selection** - DEMO/REAL mode switching
+- ✅ **Exchange Selection** - 13 supported exchanges
+- ✅ **WebSocket Hook** - React hook for chat connection
+
+### Risk Management Integration
 - ✅ Risk Service with Exchange Integration
 - ✅ Real-time Portfolio Data from Exchanges
 - ✅ GARCH-VaR Integration for Dynamic Risk Assessment
