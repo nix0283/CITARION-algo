@@ -1,0 +1,78 @@
+# HFT Service Configuration
+# CITARION Trading Platform
+
+# HTTP API Server
+server:
+  port: 3005
+
+# Exchange WebSocket Connections
+exchanges:
+  binance:
+    enabled: true
+    ws_url: "wss://fstream.binance.com/ws"
+    # For spot: wss://stream.binance.com/ws
+    api_key: ""
+    secret_key: ""
+  
+  bybit:
+    enabled: true
+    ws_url: "wss://stream.bybit.com/v5/public/linear"
+    # For spot: wss://stream.bybit.com/v5/public/spot
+    api_key: ""
+    secret_key: ""
+
+# HFT Engine Settings
+hft:
+  # Maximum acceptable processing latency (nanoseconds)
+  # 1ms = 1,000,000ns
+  max_latency_ns: 1000000
+  
+  # Orderbook depth to maintain
+  orderbook_depth: 20
+  
+  # Minimum signal strength threshold (0-1)
+  signal_threshold: 0.7
+  
+  # Orderbook imbalance threshold for signals
+  # |imbalance| > threshold triggers signal
+  imbalance_threshold: 0.3
+  
+  # Momentum detection window (number of price updates)
+  momentum_window: 100
+  
+  # Momentum threshold (% price change)
+  # 0.002 = 0.2% price movement
+  momentum_threshold: 0.002
+
+# Performance Tuning
+performance:
+  # Number of workers for parallel processing
+  workers: 4
+  
+  # Message queue size
+  queue_size: 10000
+  
+  # Enable CPU profiling
+  cpu_profile: false
+  
+  # Enable memory profiling
+  mem_profile: false
+
+# Logging
+logging:
+  level: "info"
+  format: "json"
+  
+  # Log slow operations (threshold in nanoseconds)
+  slow_threshold_ns: 500000
+
+# Metrics Export
+metrics:
+  # Enable Prometheus metrics
+  enabled: true
+  
+  # Metrics endpoint path
+  path: "/prometheus"
+  
+  # Collection interval (seconds)
+  interval: 10

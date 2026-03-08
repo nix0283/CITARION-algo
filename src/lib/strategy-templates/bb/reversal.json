@@ -1,0 +1,53 @@
+{
+  "name": "BB Reversal",
+  "description": "Стратегия разворота от полос Боллинджера. Покупка у нижней полосы, продажа у верхней. Классическая контртрендовая стратегия.",
+  "category": "bb",
+  "botType": "BB",
+  "version": "1.0.0",
+  "author": "CITARION",
+  "tags": ["reversal", "mean-reversion", "oscillator", "intermediate"],
+  "config": {
+    "marketType": "FUTURES",
+    "direction": "BOTH",
+    "timeframes": ["15m", "1h"],
+    "tradeAmount": 100,
+    "leverage": 3,
+    "marginMode": "ISOLATED",
+    "stopLoss": 3,
+    "takeProfit": 5,
+    "trailingStop": null,
+    "isManualMode": false,
+    "timeframeConfigs": [
+      {
+        "timeframe": "15m",
+        "bbEnabled": true,
+        "bbInnerPeriod": 20,
+        "bbInnerDeviation": 1.0,
+        "bbOuterPeriod": 20,
+        "bbOuterDeviation": 2.0,
+        "stochEnabled": true,
+        "stochKPeriod": 14,
+        "stochDPeriod": 3,
+        "stochSlowing": 3,
+        "stochOverbought": 80,
+        "stochOversold": 20,
+        "emaEnabled": false,
+        "smaEnabled": true,
+        "smaPeriod": 50
+      }
+    ]
+  },
+  "defaultParams": {
+    "tradeAmountRange": [50, 500],
+    "leverageRange": [1, 10],
+    "stopLossRange": [2, 8],
+    "takeProfitRange": [3, 15]
+  },
+  "riskProfile": "moderate",
+  "recommendedFor": {
+    "marketCondition": "ranging",
+    "volatility": "medium",
+    "timeframe": "15m-4h"
+  },
+  "notes": "Используйте Stochastic для подтверждения сигналов. Покупайте, когда цена касается нижней полосы BB и Stochastic в зоне перепроданности."
+}

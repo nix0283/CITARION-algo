@@ -1,0 +1,97 @@
+# Lumibot Service Configuration
+service:
+  name: "lumibot-service"
+  port: 3007
+  host: "0.0.0.0"
+
+# Exchange Configurations
+exchanges:
+  binance:
+    api_key: "${BINANCE_API_KEY}"
+    api_secret: "${BINANCE_API_SECRET}"
+    sandbox: true
+  bybit:
+    api_key: "${BYBIT_API_KEY}"
+    api_secret: "${BYBIT_API_SECRET}"
+    sandbox: true
+  okx:
+    api_key: "${OKX_API_KEY}"
+    api_secret: "${OKX_API_SECRET}"
+    passphrase: "${OKX_PASSPHRASE}"
+    sandbox: true
+
+# Default Strategy Parameters
+strategies:
+  mft:  # Multi-Fill Trader (Selene) - VWAP/TWAP
+    enabled: true
+    symbols:
+      - "BTC/USDT"
+      - "ETH/USDT"
+    vwap_window: 20
+    twap_interval: 300  # 5 minutes
+    max_participation_rate: 0.1
+
+  spectrum:  # Pairs Trading (PR) - Cointegration/Kalman
+    enabled: true
+    pairs:
+      - ["BTC/USDT", "ETH/USDT"]
+      - ["SOL/USDT", "AVAX/USDT"]
+    lookback_period: 252
+    zscore_entry: 2.0
+    zscore_exit: 0.5
+    kalman_process_noise: 0.01
+    kalman_measurement_noise: 0.1
+
+  reed:  # Statistical Arbitrage (STA) - PCA/Factor Models
+    enabled: true
+    universe:
+      - "BTC/USDT"
+      - "ETH/USDT"
+      - "SOL/USDT"
+      - "AVAX/USDT"
+      - "MATIC/USDT"
+    n_factors: 3
+    lookback_period: 60
+    residual_threshold: 2.0
+
+  architect:  # Market Maker (MM) - Avellaneda-Stoikov
+    enabled: true
+    symbols:
+      - "BTC/USDT"
+      - "ETH/USDT"
+    gamma: 0.1  # Risk aversion
+    kappa: 0.5  # Order book liquidity
+    tick_size: 0.01
+    inventory_limit: 1.0
+
+  equilibrist:  # Mean Reversion (MR) - Ornstein-Uhlenbeck
+    enabled: true
+    symbols:
+      - "BTC/USDT"
+      - "ETH/USDT"
+    ou_theta: 0.5  # Mean reversion speed
+    ou_mu: 0.0     # Long-term mean
+    ou_sigma: 0.1  # Volatility
+    entry_threshold: 1.5
+    exit_threshold: 0.3
+
+  kron:  # Trend Following (TRF) - Donchian Channels
+    enabled: true
+    symbols:
+      - "BTC/USDT"
+      - "ETH/USDT"
+    upper_period: 20
+    lower_period: 20
+    position_size: 0.1
+
+# Risk Management
+risk:
+  max_position_size: 1.0
+  max_daily_loss: 0.05
+  max_drawdown: 0.1
+  leverage_limit: 3
+
+# Logging
+logging:
+  level: "INFO"
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"

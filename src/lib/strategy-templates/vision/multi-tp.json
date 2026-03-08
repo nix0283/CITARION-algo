@@ -1,0 +1,50 @@
+{
+  "name": "Vision Multi-TP",
+  "description": "Стратегия с несколькими целями прибыли. Последовательное закрытие позиции на разных уровнях для фиксации прибыли.",
+  "category": "vision",
+  "botType": "VISION",
+  "version": "1.0.0",
+  "author": "CITARION",
+  "tags": ["forecast", "ai", "multi-tp", "advanced", "automated"],
+  "config": {
+    "symbol": "BTC/USDT",
+    "direction": "BOTH",
+    "leverage": 10,
+    "marginMode": "ISOLATED",
+    "tradeAmount": 200,
+    "useForecast": true,
+    "confidenceThreshold": 0.65,
+    "riskProfile": "normal",
+    "strategy": "multi_tp",
+    "stopLoss": 4,
+    "takeProfit": null,
+    "trailingStop": "{\"enabled\": true, \"activationPercent\": 5, \"distancePercent\": 2}",
+    "cryptoSymbols": ["BTC/USDT", "ETH/USDT"],
+    "stockIndices": ["^GSPC"],
+    "goldSymbol": "GC=F",
+    "timeframe": "1h",
+    "lookbackDays": 30,
+    "volatilityLow": 0.01,
+    "volatilityHigh": 0.05,
+    "trendThreshold": 0.02,
+    "correlationWeight": 0.35,
+    "tradingEnabled": false,
+    "tradingFee": 0.001,
+    "initialCapital": 10000,
+    "forecastIntervalMinutes": 60,
+    "tradingCycleHours": 24,
+    "telegramEnabled": true
+  },
+  "defaultParams": {
+    "tradeAmountRange": [100, 1000],
+    "leverageRange": [5, 20],
+    "confidenceThresholdRange": [0.55, 0.85]
+  },
+  "riskProfile": "aggressive",
+  "recommendedFor": {
+    "marketCondition": "trending",
+    "volatility": "medium-high",
+    "timeframe": "1h-4h"
+  },
+  "notes": "Стратегия автоматически закрывает части позиции на уровнях TP1 (30%), TP2 (40%), TP3 (30%). Трейлинг стоп активируется после достижения TP1."
+}

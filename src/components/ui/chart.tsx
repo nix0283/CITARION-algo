@@ -5,6 +5,11 @@ import * as RechartsPrimitive from "recharts"
 
 import { cn } from "@/lib/utils"
 
+// Format number consistently to avoid hydration mismatch
+function formatNumber(value: number): string {
+  return value.toLocaleString("en-US")
+}
+
 // Format: { THEME_NAME: CSS_SELECTOR }
 const THEMES = { light: "", dark: ".dark" } as const
 
@@ -234,7 +239,7 @@ function ChartTooltipContent({
                     </div>
                     {item.value && (
                       <span className="text-foreground font-mono font-medium tabular-nums">
-                        {item.value.toLocaleString()}
+                        {formatNumber(item.value as number)}
                       </span>
                     )}
                   </div>

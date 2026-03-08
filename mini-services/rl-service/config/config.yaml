@@ -1,0 +1,57 @@
+# RL Service Configuration
+service:
+  name: rl-service
+  port: 3007
+  host: "0.0.0.0"
+
+agents:
+  ppo:
+    learning_rate: 0.0003
+    n_steps: 2048
+    batch_size: 64
+    n_epochs: 10
+    gamma: 0.99
+    gae_lambda: 0.95
+    clip_range: 0.2
+    ent_coef: 0.01
+  
+  sac:
+    learning_rate: 0.0003
+    buffer_size: 100000
+    learning_starts: 1000
+    batch_size: 256
+    gamma: 0.99
+    tau: 0.005
+    ent_coef: auto
+  
+  dqn:
+    learning_rate: 0.0001
+    buffer_size: 100000
+    learning_starts: 1000
+    batch_size: 32
+    gamma: 0.99
+    train_freq: 4
+    target_update_interval: 1000
+    exploration_fraction: 0.1
+    exploration_final_eps: 0.05
+
+environment:
+  initial_balance: 10000
+  leverage: 1.0
+  max_position: 1.0
+  fee_rate: 0.0004
+  lookback: 50
+  reward_scaling: 100
+
+training:
+  total_timesteps: 100000
+  log_interval: 100
+  save_freq: 10000
+
+storage:
+  models_path: ./models
+  logs_path: ./logs
+
+logging:
+  level: INFO
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"

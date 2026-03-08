@@ -1,0 +1,406 @@
+// Prisma schema for PostgreSQL + TimescaleDB
+// This schema replaces SQLite for production deployment
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url      = env("DATABASE_URL")
+  directUrl = env("DIRECT_DATABASE_URL")
+}
+
+// ============================================================================
+// USER & AUTHENTICATION
+// ============================================================================
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  emailVerified DateTime?
+  image         String?
+  password      String?
+  role          String    @default("user")
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  accounts    Account[]
+  sessions    Session[]
+  positions   Position[]
+  trades      Trade[]
+  signals     Signal[]
+  botConfigs  BotConfig[]
+  journal     JournalEntry[]
+  auditLogs   AuditLog[]
+
+  @@map("users")
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@map("verification_tokens")
+}
+
+// ============================================================================
+// TRADING CORE
+// ============================================================================
+
+model ExchangeAccount {
+  id              String   @id @default(cuid())
+  userId          String
+  exchange        String   // binance, bybit, okx, bitget, bingx
+  name            String
+  apiKey          String   // Encrypted
+  apiSecret       String   // Encrypted
+  passphrase      String?  // Encrypted (for OKX)
+  isDemo          Boolean  @default(false)
+  isActive        Boolean  @default(true)
+  lastSync        DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  positions       Position[]
+  trades          Trade[]
+
+  @@unique([userId, exchange, name])
+  @@map("exchange_accounts")
+}
+
+model Position {
+  id              String   @id @default(cuid())
+  userId          String
+  exchangeAccount String?
+  symbol          String
+  side            String   // LONG, SHORT
+  type            String   // SPOT, FUTURES
+  size            Float
+  entryPrice      Float
+  currentPrice    Float?
+  leverage        Float    @default(1)
+  margin          Float?
+  unrealizedPnl   Float?
+  liquidationPrice Float?
+  stopLoss        Float?
+  takeProfit      Float?
+  trailingStop    Float?
+  status          String   @default("OPEN") // OPEN, CLOSED, LIQUIDATED
+  openedAt        DateTime @default(now())
+  closedAt        DateTime?
+  closeReason     String?
+  realizedPnl     Float?
+  fees            Float    @default(0)
+
+  user            User     @relation(fields: [userId], references: [id])
+  trades          Trade[]
+  escortRequests  EscortRequest[]
+
+  @@index([userId, status])
+  @@index([symbol, status])
+  @@index([openedAt])
+  @@map("positions")
+}
+
+model Trade {
+  id              String   @id @default(cuid())
+  userId          String
+  positionId      String?
+  exchangeAccount String?
+  symbol          String
+  side            String   // BUY, SELL
+  type            String   // MARKET, LIMIT, STOP, etc.
+  size            Float
+  price           Float
+  stopPrice       Float?
+  fee             Float    @default(0)
+  feeCurrency     String?
+  pnl             Float?
+  status          String   @default("PENDING") // PENDING, FILLED, CANCELLED, REJECTED
+  orderType       String?
+  exchangeOrderId String?
+  openedAt        DateTime @default(now())
+  closedAt        DateTime?
+  errorMessage    String?  @db.Text
+
+  user            User     @relation(fields: [userId], references: [id])
+  position        Position? @relation(fields: [positionId], references: [id])
+
+  @@index([userId, symbol])
+  @@index([openedAt])
+  @@index([status])
+  @@map("trades")
+}
+
+// ============================================================================
+// SIGNALS & BOTS
+// ============================================================================
+
+model Signal {
+  id          String   @id @default(cuid())
+  userId      String
+  source      String   // MANUAL, TRADINGVIEW, BOT
+  symbol      String
+  side        String   // LONG, SHORT
+  entryPrice  Float?
+  stopLoss    Float?
+  takeProfit  Float[]
+  size        Float?
+  confidence  Float?
+  status      String   @default("PENDING") // PENDING, EXECUTED, REJECTED, EXPIRED
+  rawData     Json?
+  parsedAt    DateTime @default(now())
+  executedAt  DateTime?
+  positionId  String?
+
+  user        User     @relation(fields: [userId], references: [id])
+
+  @@index([userId, status])
+  @@index([parsedAt])
+  @@map("signals")
+}
+
+model BotConfig {
+  id          String   @id @default(cuid())
+  userId      String
+  botType     String   // grid, dca, bb, argus, vision, orion, etc.
+  name        String
+  symbol      String
+  exchange    String?
+  isDemo      Boolean  @default(false)
+  isActive    Boolean  @default(false)
+  config      Json
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user        User     @relation(fields: [userId], references: [id])
+
+  @@unique([userId, botType, name])
+  @@map("bot_configs")
+}
+
+// ============================================================================
+// OHLCV DATA (TimescaleDB hypertable)
+// ============================================================================
+
+model OhlcvCandle {
+  time      DateTime @id
+  symbol    String
+  interval  String
+  open      Float
+  high      Float
+  low       Float
+  close     Float
+  volume    Float
+
+  @@unique([time, symbol, interval])
+  @@index([symbol, interval, time])
+  @@map("ohlcv_candles")
+}
+
+// ============================================================================
+// JOURNAL & ANALYTICS
+// ============================================================================
+
+model JournalEntry {
+  id            String   @id @default(cuid())
+  userId        String
+  symbol        String
+  side          String
+  entryPrice    Float
+  exitPrice     Float?
+  size          Float
+  pnl           Float?
+  pnlPercent    Float?
+  status        String   @default("OPEN")
+  marketCondition String?
+  signalSource  String?
+  confidence    Float?
+  entryQuality  Float?
+  exitQuality   Float?
+  tags          String[]
+  notes         String?  @db.Text
+  lessons       String[]
+  mistakes      String[]
+  openedAt      DateTime @default(now())
+  closedAt      DateTime?
+  reviewStatus  String   @default("pending")
+
+  user          User     @relation(fields: [userId], references: [id])
+
+  @@index([userId, openedAt])
+  @@index([symbol])
+  @@map("journal_entries")
+}
+
+// ============================================================================
+// RISK MANAGEMENT
+// ============================================================================
+
+model RiskConfig {
+  id                  String   @id @default(cuid())
+  userId              String
+  maxPositionSize     Float    @default(10000)
+  maxPositionCount    Int      @default(5)
+  maxLeverage         Float    @default(10)
+  maxPortfolioValue   Float    @default(100000)
+  maxDrawdown         Float    @default(0.2)
+  dailyLossLimit      Float    @default(0.05)
+  maxRiskPerTrade     Float    @default(0.02)
+  killSwitchEnabled   Boolean  @default(true)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@unique([userId])
+  @@map("risk_configs")
+}
+
+// ============================================================================
+// ESCORT (Position Management)
+// ============================================================================
+
+model EscortRequest {
+  id              String   @id @default(cuid())
+  positionId      String
+  symbol          String
+  side            String
+  size            Float
+  entryPrice      Float
+  stopLoss        Float?
+  takeProfit      Float[]
+  trailingStop    Float?
+  trailingOffset  Float?
+  status          String   @default("PENDING") // PENDING, ACTIVE, COMPLETED, CANCELLED
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  completedAt     DateTime?
+
+  position        Position @relation(fields: [positionId], references: [id])
+
+  @@index([status])
+  @@map("escort_requests")
+}
+
+// ============================================================================
+// AUDIT & COMPLIANCE
+// ============================================================================
+
+model AuditLog {
+  id          String   @id @default(cuid())
+  userId      String?
+  action      String
+  resource    String
+  resourceId  String?
+  details     Json?
+  ipAddress   String?
+  userAgent   String?
+  result      String   // SUCCESS, FAILURE
+  errorMessage String?
+  timestamp   DateTime @default(now())
+
+  user        User?    @relation(fields: [userId], references: [id])
+
+  @@index([userId, timestamp])
+  @@index([action, timestamp])
+  @@map("audit_logs")
+}
+
+// ============================================================================
+// ML & LEARNING
+// ============================================================================
+
+model ClassifiedSignal {
+  id            String   @id @default(cuid())
+  signalId      String   @unique
+  features      Json
+  prediction    String
+  confidence    Float
+  modelVersion  String
+  outcome       String?  // LONG_WIN, LONG_LOSS, SHORT_WIN, SHORT_LOSS, NEUTRAL
+  actualPnl     Float?
+  feedback      Json?
+  classifiedAt  DateTime @default(now())
+  feedbackAt    DateTime?
+
+  @@index([classifiedAt])
+  @@index([prediction])
+  @@map("classified_signals")
+}
+
+model GeneticOptimization {
+  id              String   @id @default(cuid())
+  botType         String
+  generation      Int
+  bestFitness     Float
+  bestParams      Json
+  populationSize  Int
+  generations     Int
+  duration        Int      // milliseconds
+  stats           Json
+  createdAt       DateTime @default(now())
+
+  @@index([botType, createdAt])
+  @@map("genetic_optimizations")
+}
+
+// ============================================================================
+// SYSTEM
+// ============================================================================
+
+model SystemLog {
+  id        String   @id @default(cuid())
+  level     String   // INFO, WARN, ERROR, CRITICAL
+  category  String
+  message   String   @db.Text
+  metadata  Json?
+  timestamp DateTime @default(now())
+
+  @@index([level, timestamp])
+  @@index([category, timestamp])
+  @@map("system_logs")
+}
+
+model MarketPrice {
+  symbol    String   @id
+  price     Float
+  change24h Float?
+  volume24h Float?
+  updatedAt DateTime @updatedAt
+
+  @@map("market_prices")
+}

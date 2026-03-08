@@ -1,122 +1,1047 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
+/* React Grid Layout CSS - commented out (package not installed)
+@import "../../node_modules/react-grid-layout/css/styles.css";
+@import "../../node_modules/react-resizable/css/styles.css";
+*/
+
 @custom-variant dark (&:is(.dark *));
 
+/* Binance-inspired color scheme for CITARION */
+:root {
+  /* Light theme - Binance style */
+  --background: 0 0% 98%;           /* #FAFAFA */
+  --foreground: 220 20% 10%;        /* Dark text */
+  --card: 0 0% 100%;                /* #FFFFFF */
+  --card-foreground: 220 20% 10%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 220 20% 10%;
+  
+  /* Primary: Binance Gold #F0B90B */
+  --primary: 45 94% 50%;
+  --primary-foreground: 220 20% 10%;
+  
+  --secondary: 220 15% 95%;
+  --secondary-foreground: 220 20% 10%;
+  --muted: 220 15% 95%;
+  --muted-foreground: 220 10% 45%;
+  --accent: 220 15% 95%;
+  --accent-foreground: 220 20% 10%;
+  
+  /* Success: Binance Green #0ECB81 */
+  --success: 150 90% 46%;
+  --success-foreground: 0 0% 100%;
+  
+  /* Destructive: Binance Red #F6465D */
+  --destructive: 352 91% 62%;
+  --destructive-foreground: 0 0% 100%;
+  
+  --border: 220 15% 90%;
+  --input: 220 15% 90%;
+  --ring: 45 94% 50%;
+  --radius: 0.5rem;
+  
+  /* Warning: Binance Gold */
+  --warning: 45 94% 50%;
+  --warning-foreground: 220 20% 10%;
+  
+  /* Chart colors */
+  --chart-1: 45 94% 50%;   /* Gold */
+  --chart-2: 352 91% 62%;  /* Red */
+  --chart-3: 150 90% 46%;  /* Green */
+  --chart-4: 200 90% 50%;  /* Blue */
+  --chart-5: 270 70% 60%;  /* Purple */
+}
+
+.dark {
+  /* Dark theme - Binance style */
+  --background: 220 20% 5%;         /* #0B0E11 */
+  --foreground: 0 0% 95%;           /* Light text */
+  --card: 220 15% 10%;              /* #1E2329 */
+  --card-foreground: 0 0% 95%;
+  --popover: 220 15% 10%;
+  --popover-foreground: 0 0% 95%;
+  
+  /* Primary: Binance Gold #F0B90B - same in dark */
+  --primary: 45 94% 50%;
+  --primary-foreground: 220 20% 5%;
+  
+  --secondary: 220 15% 15%;         /* #2B3139 */
+  --secondary-foreground: 0 0% 95%;
+  --muted: 220 15% 15%;
+  --muted-foreground: 220 10% 55%;
+  --accent: 220 15% 15%;
+  --accent-foreground: 0 0% 95%;
+  
+  /* Success: Binance Green #0ECB81 */
+  --success: 150 90% 46%;
+  --success-foreground: 0 0% 100%;
+  
+  /* Destructive: Binance Red #F6465D */
+  --destructive: 352 91% 62%;
+  --destructive-foreground: 0 0% 100%;
+  
+  --border: 220 15% 20%;            /* #2B3139 */
+  --input: 220 15% 20%;
+  --ring: 45 94% 50%;
+  
+  /* Warning: Binance Gold */
+  --warning: 45 94% 50%;
+  --warning-foreground: 220 20% 5%;
+  
+  /* Chart colors - same for dark */
+  --chart-1: 45 94% 50%;   /* Gold */
+  --chart-2: 352 91% 62%;  /* Red */
+  --chart-3: 150 90% 46%;  /* Green */
+  --chart-4: 200 90% 50%;  /* Blue */
+  --chart-5: 270 70% 60%;  /* Purple */
+}
+
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-  --color-sidebar-ring: var(--sidebar-ring);
-  --color-sidebar-border: var(--sidebar-border);
-  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
-  --color-sidebar-accent: var(--sidebar-accent);
-  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
-  --color-sidebar-primary: var(--sidebar-primary);
-  --color-sidebar-foreground: var(--sidebar-foreground);
-  --color-sidebar: var(--sidebar);
-  --color-chart-5: var(--chart-5);
-  --color-chart-4: var(--chart-4);
-  --color-chart-3: var(--chart-3);
-  --color-chart-2: var(--chart-2);
-  --color-chart-1: var(--chart-1);
-  --color-ring: var(--ring);
-  --color-input: var(--input);
-  --color-border: var(--border);
-  --color-destructive: var(--destructive);
-  --color-accent-foreground: var(--accent-foreground);
-  --color-accent: var(--accent);
-  --color-muted-foreground: var(--muted-foreground);
-  --color-muted: var(--muted);
-  --color-secondary-foreground: var(--secondary-foreground);
-  --color-secondary: var(--secondary);
-  --color-primary-foreground: var(--primary-foreground);
-  --color-primary: var(--primary);
-  --color-popover-foreground: var(--popover-foreground);
-  --color-popover: var(--popover);
-  --color-card-foreground: var(--card-foreground);
-  --color-card: var(--card);
+  --color-background: hsl(var(--background));
+  --color-foreground: hsl(var(--foreground));
+  --color-card: hsl(var(--card));
+  --color-card-foreground: hsl(var(--card-foreground));
+  --color-popover: hsl(var(--popover));
+  --color-popover-foreground: hsl(var(--popover-foreground));
+  --color-primary: hsl(var(--primary));
+  --color-primary-foreground: hsl(var(--primary-foreground));
+  --color-secondary: hsl(var(--secondary));
+  --color-secondary-foreground: hsl(var(--secondary-foreground));
+  --color-muted: hsl(var(--muted));
+  --color-muted-foreground: hsl(var(--muted-foreground));
+  --color-accent: hsl(var(--accent));
+  --color-accent-foreground: hsl(var(--accent-foreground));
+  --color-destructive: hsl(var(--destructive));
+  --color-destructive-foreground: hsl(var(--destructive-foreground));
+  --color-border: hsl(var(--border));
+  --color-input: hsl(var(--input));
+  --color-ring: hsl(var(--ring));
+  --color-success: hsl(var(--success));
+  --color-warning: hsl(var(--warning));
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
 }
 
-:root {
-  --radius: 0.625rem;
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.646 0.222 41.116);
-  --chart-2: oklch(0.6 0.118 184.704);
-  --chart-3: oklch(0.398 0.07 227.392);
-  --chart-4: oklch(0.828 0.189 84.429);
-  --chart-5: oklch(0.769 0.188 70.08);
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
-}
-
-.dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.488 0.243 264.376);
-  --chart-2: oklch(0.696 0.17 162.48);
-  --chart-3: oklch(0.769 0.188 70.08);
-  --chart-4: oklch(0.627 0.265 303.9);
-  --chart-5: oklch(0.645 0.246 16.439);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
-}
-
 @layer base {
   * {
-    @apply border-border outline-ring/50;
+    @apply border-border;
   }
   body {
     @apply bg-background text-foreground;
+    font-feature-settings: "rlig" 1, "calt" 1;
+    /* Mobile safe area support */
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+  }
+}
+
+/* Mobile touch target minimum size */
+@layer utilities {
+  .touch-target {
+    min-height: 44px;
+    min-width: 44px;
+  }
+}
+
+/* Custom scrollbar - Binance style */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: hsl(var(--muted-foreground) / 0.3);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--primary) / 0.5);
+}
+
+/* Animations */
+@keyframes pulse-glow {
+  0%, 100% {
+    box-shadow: 0 0 0 0 hsl(var(--primary) / 0.4);
+  }
+  50% {
+    box-shadow: 0 0 20px 5px hsl(var(--primary) / 0.2);
+  }
+}
+
+.animate-pulse-glow {
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+
+@keyframes slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-slide-up {
+  animation: slide-up 0.3s ease-out;
+}
+
+@keyframes count-up {
+  from {
+    opacity: 0;
+    transform: translateY(5px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-count-up {
+  animation: count-up 0.5s ease-out;
+}
+
+/* Number animation for PnL - Binance colors */
+.pnl-positive {
+  @apply text-green-500 dark:text-[#0ECB81];
+}
+
+.pnl-negative {
+  @apply text-red-500 dark:text-[#F6465D];
+}
+
+/* Card hover effects */
+.card-hover {
+  @apply transition-all duration-200 hover:shadow-lg hover:shadow-primary/5 hover:scale-[1.01];
+}
+
+/* Gradient backgrounds - Binance Gold theme */
+.gradient-primary {
+  background: linear-gradient(135deg, #F0B90B 0%, #D4A00A 100%);
+}
+
+.gradient-success {
+  background: linear-gradient(135deg, #0ECB81 0%, #0BA06A 100%);
+}
+
+.gradient-danger {
+  background: linear-gradient(135deg, #F6465D 0%, #D13A4E 100%);
+}
+
+.gradient-warning {
+  background: linear-gradient(135deg, #F0B90B 0%, #D4A00A 100%);
+}
+
+/* Gold gradient for logo and highlights */
+.gradient-gold {
+  background: linear-gradient(135deg, #F0B90B 0%, #FCD535 50%, #F0B90B 100%);
+}
+
+/* Demo badge styling - Binance amber */
+.demo-badge {
+  @apply bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/30;
+}
+
+.real-badge {
+  @apply bg-green-500/20 text-[#0ECB81] border border-green-500/30;
+}
+
+/* Status indicators */
+.status-active {
+  @apply w-2 h-2 rounded-full bg-[#0ECB81] animate-pulse;
+}
+
+.status-inactive {
+  @apply w-2 h-2 rounded-full bg-gray-400;
+}
+
+.status-pending {
+  @apply w-2 h-2 rounded-full bg-[#F0B90B] animate-pulse;
+}
+
+/* Binance-style button hover */
+.btn-binance {
+  @apply transition-all duration-150 hover:brightness-110 active:scale-[0.98];
+}
+
+/* Sidebar styling */
+.sidebar-logo {
+  background: linear-gradient(135deg, #F0B90B 0%, #FCD535 100%);
+}
+
+/* Table row hover */
+.table-row-hover {
+  @apply hover:bg-secondary/50 transition-colors;
+}
+
+/* Input focus - Binance gold ring */
+input:focus, textarea:focus, select:focus {
+  @apply ring-1 ring-primary/50 border-primary/50;
+}
+
+/* Custom selection color */
+::selection {
+  background: hsl(var(--primary) / 0.3);
+  color: hsl(var(--foreground));
+}
+
+/* Hide TradingView attribution logo in lightweight-charts */
+.hide-tv-logo a,
+.hide-tv-logo a[href*="tradingview"],
+.hide-tv-logo a[href*="tradingview.com"],
+.tv-lightweight-charts a,
+.tv-lightweight-charts a[href*="tradingview"],
+div[data-testid="attribution"] {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+/* ============================================
+   Loading Skeleton Animations
+   ============================================ */
+
+@keyframes skeleton-pulse {
+  0%, 100% {
+    opacity: 0.4;
+  }
+  50% {
+    opacity: 0.7;
+  }
+}
+
+@keyframes skeleton-shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+/* Skeleton base animation */
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    hsl(var(--muted)) 0%,
+    hsl(var(--muted-foreground) / 0.1) 50%,
+    hsl(var(--muted)) 100%
+  );
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.5s ease-in-out infinite;
+  border-radius: var(--radius);
+}
+
+/* Skeleton variants */
+.skeleton-text {
+  height: 1em;
+  border-radius: 0.25em;
+}
+
+.skeleton-title {
+  height: 1.5em;
+  width: 60%;
+  border-radius: 0.25em;
+}
+
+.skeleton-circle {
+  border-radius: 50%;
+}
+
+.skeleton-card {
+  border-radius: var(--radius);
+  height: 100%;
+}
+
+/* Fast skeleton animation for critical loading states */
+.skeleton-fast {
+  animation: skeleton-shimmer 0.8s ease-in-out infinite;
+}
+
+/* ============================================
+   Mobile Bottom Navigation
+   ============================================ */
+
+.mobile-nav-safe-area {
+  padding-bottom: calc(60px + env(safe-area-inset-bottom));
+}
+
+/* ============================================
+   Accessibility Improvements
+   ============================================ */
+
+/* Focus visible for keyboard navigation */
+:focus-visible {
+  outline: 2px solid hsl(var(--primary));
+  outline-offset: 2px;
+}
+
+/* Reduce motion for users who prefer it */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+  
+  .skeleton {
+    animation: none;
+    opacity: 0.5;
+  }
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+  :root {
+    --border: 220 10% 30%;
+  }
+  
+  .dark {
+    --border: 220 10% 70%;
+  }
+}
+
+/* ============================================
+   Dark Theme Scrollbar Enhancement
+   ============================================ */
+
+.dark ::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.dark ::-webkit-scrollbar-track {
+  background: hsl(var(--background));
+  border-radius: 4px;
+}
+
+.dark ::-webkit-scrollbar-thumb {
+  background: hsl(var(--muted-foreground) / 0.4);
+  border-radius: 4px;
+  border: 2px solid hsl(var(--background));
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--primary) / 0.6);
+}
+
+/* Firefox scrollbar */
+.dark * {
+  scrollbar-width: thin;
+  scrollbar-color: hsl(var(--muted-foreground) / 0.4) hsl(var(--background));
+}
+
+/* ============================================
+   Balance Animation for Changes
+   ============================================ */
+
+@keyframes balance-change-positive {
+  0% {
+    background-color: hsl(var(--success) / 0.3);
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+
+@keyframes balance-change-negative {
+  0% {
+    background-color: hsl(var(--destructive) / 0.3);
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+
+.balance-flash-positive {
+  animation: balance-change-positive 0.6s ease-out;
+}
+
+.balance-flash-negative {
+  animation: balance-change-negative 0.6s ease-out;
+}
+
+/* ============================================
+   Mobile Drawer Overlay
+   ============================================ */
+
+.drawer-overlay {
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(2px);
+}
+
+/* ============================================
+   Cornix UI-Example Adaptation Styles
+   ============================================ */
+
+/* Panel color indicators (Entries/TP/SL style) */
+.panel-indicator-blue {
+  @apply w-2 h-2 rounded-full bg-blue-500;
+}
+
+.panel-indicator-green {
+  @apply w-2 h-2 rounded-full bg-green-500;
+}
+
+.panel-indicator-orange {
+  @apply w-2 h-2 rounded-full bg-orange-500;
+}
+
+.panel-indicator-purple {
+  @apply w-2 h-2 rounded-full bg-purple-500;
+}
+
+/* Section header with indicator */
+.section-header {
+  @apply flex items-center gap-2 mb-3;
+}
+
+.section-header-indicator {
+  @apply flex items-center gap-2 mb-3 pb-2 border-b border-border;
+}
+
+/* Stat card styling */
+.stat-card {
+  @apply bg-card rounded-lg p-4 border border-border hover:shadow-sm transition-shadow;
+}
+
+.stat-label {
+  @apply text-xs text-muted-foreground uppercase tracking-wider mb-1;
+}
+
+.stat-value {
+  @apply text-2xl font-bold text-foreground;
+}
+
+.stat-value-large {
+  @apply text-3xl font-bold text-foreground;
+}
+
+.stat-trend-positive {
+  @apply text-green-500 text-sm flex items-center gap-1;
+}
+
+.stat-trend-negative {
+  @apply text-red-500 text-sm flex items-center gap-1;
+}
+
+/* Config section styling */
+.config-section {
+  @apply rounded-lg border border-border bg-card p-4 space-y-4;
+}
+
+.config-section-title {
+  @apply text-sm font-semibold text-foreground mb-3;
+}
+
+.config-row {
+  @apply flex items-center justify-between py-2;
+}
+
+.config-label {
+  @apply text-sm text-muted-foreground;
+}
+
+.config-value {
+  @apply text-sm font-medium text-foreground;
+}
+
+/* Bot card styling */
+.bot-card {
+  @apply rounded-lg border border-border bg-card overflow-hidden hover:shadow-md transition-all duration-200;
+}
+
+.bot-card-header {
+  @apply p-4 border-b border-border flex items-center justify-between;
+}
+
+.bot-card-body {
+  @apply p-4 space-y-4;
+}
+
+.bot-card-footer {
+  @apply p-4 border-t border-border flex items-center justify-end gap-2;
+}
+
+/* Mini chart container */
+.mini-chart-container {
+  @apply h-16 w-32 flex items-end gap-0.5;
+}
+
+.mini-chart-bar {
+  @apply w-1 rounded-t bg-primary/50;
+}
+
+/* Time range selector */
+.time-range-selector {
+  @apply flex gap-1;
+}
+
+.time-range-button {
+  @apply px-3 py-1 text-sm font-medium rounded-md transition-colors;
+}
+
+.time-range-button-active {
+  @apply bg-primary text-primary-foreground;
+}
+
+.time-range-button-inactive {
+  @apply bg-muted text-muted-foreground hover:bg-muted/80;
+}
+
+/* Filter tabs */
+.filter-tabs {
+  @apply flex gap-2;
+}
+
+.filter-tab {
+  @apply px-3 py-1 text-sm rounded-full bg-muted hover:bg-muted/80 transition-colors;
+}
+
+.filter-tab-active {
+  @apply bg-primary/10 text-primary;
+}
+
+/* Notification item */
+.notification-item {
+  @apply p-4 border-b border-border hover:bg-muted/50 cursor-pointer transition-colors;
+}
+
+.notification-item-unread {
+  @apply bg-primary/5;
+}
+
+/* Trader card */
+.trader-card {
+  @apply rounded-lg border border-border bg-card p-4 hover:shadow-md transition-shadow;
+}
+
+.trader-stat {
+  @apply text-center;
+}
+
+.trader-stat-label {
+  @apply text-xs text-muted-foreground;
+}
+
+.trader-stat-value {
+  @apply text-lg font-semibold;
+}
+
+/* Data table enhancements */
+.data-table-header {
+  @apply px-4 py-3 text-left text-sm font-medium text-muted-foreground border-b border-border;
+}
+
+.data-table-row {
+  @apply border-b border-border/50 hover:bg-muted/30 transition-colors;
+}
+
+.data-table-cell {
+  @apply px-4 py-3 text-sm;
+}
+
+/* Metrics grid */
+.metrics-grid-2 {
+  @apply grid grid-cols-2 gap-4;
+}
+
+.metrics-grid-3 {
+  @apply grid grid-cols-3 gap-4;
+}
+
+.metrics-grid-4 {
+  @apply grid grid-cols-4 gap-4;
+}
+
+/* Panel layouts */
+.panel-left-fixed {
+  @apply w-72 lg:w-80 flex-shrink-0;
+}
+
+.panel-right-fixed {
+  @apply w-80 lg:w-96 flex-shrink-0;
+}
+
+.panel-main {
+  @apply flex-1 min-w-0;
+}
+
+/* Status badge */
+.status-badge {
+  @apply inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium;
+}
+
+.status-badge-active {
+  @apply bg-green-500/10 text-green-600 dark:text-green-400;
+}
+
+.status-badge-inactive {
+  @apply bg-gray-500/10 text-gray-600 dark:text-gray-400;
+}
+
+.status-badge-pending {
+  @apply bg-yellow-500/10 text-yellow-600 dark:text-yellow-400;
+}
+
+.status-badge-error {
+  @apply bg-red-500/10 text-red-600 dark:text-red-400;
+}
+
+/* Risk meter */
+.risk-meter {
+  @apply h-2 rounded-full bg-muted overflow-hidden;
+}
+
+.risk-meter-fill {
+  @apply h-full rounded-full transition-all duration-300;
+}
+
+.risk-low {
+  @apply bg-green-500;
+}
+
+.risk-medium {
+  @apply bg-yellow-500;
+}
+
+.risk-high {
+  @apply bg-orange-500;
+}
+
+.risk-critical {
+  @apply bg-red-500;
+}
+
+/* Progress indicator */
+.progress-ring {
+  @apply transform -rotate-90;
+}
+
+.progress-ring-circle {
+  @apply transition-all duration-300;
+}
+
+/* Bot status indicator */
+.bot-status-dot {
+  @apply w-2 h-2 rounded-full;
+}
+
+.bot-status-running {
+  @apply bg-green-500 animate-pulse;
+}
+
+.bot-status-paused {
+  @apply bg-yellow-500;
+}
+
+.bot-status-stopped {
+  @apply bg-gray-400;
+}
+
+.bot-status-error {
+  @apply bg-red-500;
+}
+
+/* Configuration grid */
+.config-grid-2 {
+  @apply grid grid-cols-2 gap-3;
+}
+
+.config-grid-3 {
+  @apply grid grid-cols-3 gap-3;
+}
+
+.config-grid-4 {
+  @apply grid grid-cols-4 gap-3;
+}
+
+/* Quick action button */
+.quick-action {
+  @apply h-8 px-3 text-sm rounded-md font-medium transition-all duration-150;
+}
+
+.quick-action-primary {
+  @apply bg-primary text-primary-foreground hover:brightness-110 active:scale-[0.98];
+}
+
+.quick-action-secondary {
+  @apply bg-secondary text-secondary-foreground hover:bg-secondary/80 active:scale-[0.98];
+}
+
+.quick-action-ghost {
+  @apply hover:bg-muted text-foreground active:scale-[0.98];
+}
+
+/* Divider with text */
+.divider-text {
+  @apply flex items-center gap-4 text-sm text-muted-foreground;
+}
+
+.divider-text::before,
+.divider-text::after {
+  content: '';
+  @apply flex-1 h-px bg-border;
+}
+
+/* Responsive text sizes */
+.text-responsive-sm {
+  @apply text-xs sm:text-sm;
+}
+
+.text-responsive-base {
+  @apply text-sm sm:text-base;
+}
+
+.text-responsive-lg {
+  @apply text-base sm:text-lg;
+}
+
+/* Responsive spacing */
+.space-responsive {
+  @apply space-y-3 sm:space-y-4 lg:space-y-6;
+}
+
+/* Card elevation */
+.elevation-0 {
+  @apply shadow-none;
+}
+
+.elevation-1 {
+  @apply shadow-sm;
+}
+
+.elevation-2 {
+  @apply shadow-md;
+}
+
+.elevation-3 {
+  @apply shadow-lg;
+}
+
+/* ============================================
+   Additional UI Components
+   ============================================ */
+
+/* Config row layout */
+.config-row {
+  @apply flex items-center justify-between py-2 border-b border-border/30 last:border-0;
+}
+
+.config-label {
+  @apply text-sm text-muted-foreground;
+}
+
+.config-value {
+  @apply text-sm font-medium text-foreground;
+}
+
+/* Metrics grid */
+.metrics-grid-2 {
+  @apply grid grid-cols-2 gap-4;
+}
+
+.metrics-grid-3 {
+  @apply grid grid-cols-3 gap-4;
+}
+
+.metrics-grid-4 {
+  @apply grid grid-cols-4 gap-4;
+}
+
+/* Metric display */
+.metric-label {
+  @apply text-[10px] text-muted-foreground uppercase tracking-wider;
+}
+
+.metric-value {
+  @apply text-sm font-semibold text-foreground;
+}
+
+.metric-value-success {
+  @apply text-green-500;
+}
+
+.metric-value-error {
+  @apply text-red-500;
+}
+
+.metric-value-primary {
+  @apply text-primary;
+}
+
+/* Mini chart bar chart */
+.mini-chart-container {
+  @apply flex items-end gap-0.5 w-full;
+}
+
+.mini-chart-bar {
+  @apply w-2 bg-primary/60 rounded-t;
+}
+
+.mini-chart-bar:hover {
+  @apply bg-primary;
+}
+
+/* Status Badge */
+.status-badge-active {
+  @apply bg-green-500/10 text-green-600 dark:text-green-400 border-green-500/20;
+}
+
+.status-badge-inactive {
+  @apply bg-gray-500/10 text-gray-600 dark:text-gray-400 border-gray-500/20;
+}
+
+.status-badge-pending {
+  @apply bg-yellow-500/10 text-yellow-600 dark:text-yellow-400 border-yellow-500/20;
+}
+
+.status-badge-error {
+  @apply bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20;
+}
+
+/* Bot status dot */
+.bot-status-dot {
+  @apply w-2 h-2 rounded-full inline-block;
+}
+
+.bot-status-running {
+  @apply bg-green-500;
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+.bot-status-paused {
+  @apply bg-yellow-500;
+}
+
+.bot-status-stopped {
+  @apply bg-gray-400;
+}
+
+.bot-status-error {
+  @apply bg-red-500;
+}
+
+/* Bot card specific styles */
+.bot-card-body {
+  @apply p-4 space-y-4;
+}
+
+.bot-card-footer {
+  @apply p-4 border-t border-border flex items-center justify-end gap-2 bg-muted/30;
+}
+
+/* Time range selector buttons */
+.time-range-button {
+  @apply px-3 py-1 text-xs font-medium rounded transition-colors;
+}
+
+.time-range-button-active {
+  @apply bg-primary text-primary-foreground;
+}
+
+.time-range-button-inactive {
+  @apply bg-muted text-muted-foreground hover:bg-muted/80;
+}
+
+/* Filter tabs */
+.filter-tabs {
+  @apply flex gap-2 flex-wrap;
+}
+
+.filter-tab {
+  @apply px-3 py-1.5 text-xs font-medium rounded-full bg-muted hover:bg-muted/80 transition-colors cursor-pointer;
+}
+
+.filter-tab-active {
+  @apply bg-primary/10 text-primary border border-primary/20;
+}
+
+/* Data table improvements */
+.data-table-container {
+  @apply rounded-lg border border-border overflow-hidden bg-card;
+}
+
+.data-table-header-row {
+  @apply bg-muted/50 border-b border-border;
+}
+
+.data-table-body-row {
+  @apply border-b border-border/50 hover:bg-muted/30 transition-colors;
+}
+
+.data-table-body-row:last-child {
+  @apply border-b-0;
+}
+
+/* Search input with icon */
+.search-input-container {
+  @apply relative;
+}
+
+.search-input-icon {
+  @apply absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground;
+}
+
+.search-input {
+  @apply pl-10 pr-4 py-2 w-full rounded-md border border-input bg-background text-sm;
+}
+
+/* Card variants */
+.card-default {
+  @apply bg-card border border-border rounded-lg;
+}
+
+.card-interactive {
+  @apply bg-card border border-border rounded-lg hover:shadow-md hover:border-primary/20 transition-all cursor-pointer;
+}
+
+.card-selected {
+  @apply bg-card border-2 border-primary rounded-lg shadow-sm;
+}
+
+/* Loading placeholder */
+.loading-placeholder {
+  @apply bg-muted animate-pulse rounded;
+}
+
+/* Animated value change */
+.value-change-up {
+  animation: flash-green 0.5s ease-out;
+}
+
+.value-change-down {
+  animation: flash-red 0.5s ease-out;
+}
+
+@keyframes flash-green {
+  0% {
+    background-color: rgba(34, 197, 94, 0.3);
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+
+@keyframes flash-red {
+  0% {
+    background-color: rgba(239, 68, 68, 0.3);
+  }
+  100% {
+    background-color: transparent;
   }
 }

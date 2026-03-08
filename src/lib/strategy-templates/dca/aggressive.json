@@ -1,0 +1,38 @@
+{
+  "name": "DCA Aggressive",
+  "description": "Агрессивная DCA стратегия с 6 уровнями докупки по 2% падения с мультипликатором 2x. Максимум риска для опытных трейдеров.",
+  "category": "dca",
+  "botType": "DCA",
+  "version": "1.0.0",
+  "author": "CITARION",
+  "tags": ["aggressive", "high-risk", "futures", "advanced"],
+  "config": {
+    "direction": "LONG",
+    "entryType": "MARKET",
+    "baseAmount": 50,
+    "dcaLevels": 6,
+    "dcaPercent": 2,
+    "dcaMultiplier": 2.0,
+    "tpType": "PERCENT",
+    "tpValue": 6,
+    "slEnabled": true,
+    "slType": "PERCENT",
+    "slValue": 8,
+    "trailingEnabled": true,
+    "trailingPercent": 2,
+    "leverage": 5,
+    "marginMode": "ISOLATED"
+  },
+  "defaultParams": {
+    "baseAmountRange": [25, 200],
+    "dcaLevelsRange": [4, 8],
+    "dcaPercentRange": [1.5, 3]
+  },
+  "riskProfile": "aggressive",
+  "recommendedFor": {
+    "marketCondition": "volatile",
+    "volatility": "high",
+    "timeframe": "15m-1h"
+  },
+  "notes": "Агрессивная стратегия для опытных трейдеров. Высокий риск, но возможность быстрого восстановления при откате."
+}

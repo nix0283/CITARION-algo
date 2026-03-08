@@ -1,4 +1,4 @@
-# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+# See https://help.github.com/articles/ignoring-files/ for more about the ignoring files.
 
 # dependencies
 node_modules
@@ -49,3 +49,45 @@ prompt
 server.log
 # Skills directory
 /skills/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+.venv/
+ENV/
+env/
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Database files
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+
+# Logs
+*.log
+logs/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Mini-services runtime
+mini-services/*/venv/
+mini-services/*/__pycache__/
+mini-services/*/*.pyc
+mini-services/*/node_modules/
+mini-services/*/bun.lock
+
+# Large generated files
+bun.lock
+package-lock.json

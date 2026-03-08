@@ -1,0 +1,377 @@
+"use client";
+
+import { useState, useEffect, useCallback } from "react";
+import { useCryptoStore, Position } from "@/stores/crypto-store";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
+  TrendingUp,
+  TrendingDown,
+  X,
+  Layers,
+  Clock,
+  Loader2,
+  Building2,
+  Share2,
+  MessageSquare,
+  Bot,
+  Monitor,
+  ExternalLink as ExternalLinkIcon,
+  RefreshCw,
+} from "lucide-react";
+import { cn } from "@/lib/utils";
+import { toast } from "sonner";
+import { ShareCard } from "@/components/share/share-card";
+
+interface ApiPosition {
+  id: string;
+  symbol: string;
+  direction: string;
+  totalAmount: number;
+  avgEntryPrice: number;
+  currentPrice: number;
+  leverage: number;
+  unrealizedPnl: number;
+  stopLoss: number | null;
+  takeProfit: number | null;
+  createdAt: string;
+  source?: string; // CHAT, TELEGRAM, PLATFORM, EXTERNAL
+  account: {
+    exchangeId: string;
+    exchangeName: string;
+    isTestnet: boolean;
+  };
+}
+
+export function PositionsTable() {
+  const { account, removePosition } = useCryptoStore();
+  const [apiPositions, setApiPositions] = useState<ApiPosition[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [closingId, setClosingId] = useState<string | null>(null);
+  const [showShareCard, setShowShareCard] = useState(false);
+  const [selectedPosition, setSelectedPosition] = useState<ApiPosition | null>(null);
+  
+  const isDemo = account?.accountType === "DEMO";
+
+  // Fetch positions from API
+  const fetchPositions = useCallback(async () => {
+    try {
+      setIsLoading(true);
+      // Use demo API which doesn't require authentication
+      const response = await fetch("/api/demo/trade");
+      const data = await response.json();
+      if (data.success) {
+        setApiPositions(data.positions || []);
+      }
+    } catch (error) {
+      console.error("Failed to fetch positions:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchPositions();
+    // Refresh every 30 seconds
+    const interval = setInterval(fetchPositions, 30000);
+    
+    // Listen for position-opened event from chat
+    const handlePositionOpened = (e: CustomEvent) => {
+      console.log("[PositionsTable] Position opened event received:", e.detail);
+      fetchPositions();
+    };
+    window.addEventListener("position-opened", handlePositionOpened as EventListener);
+    
+    // Listen for position-closed event
+    const handlePositionClosed = () => {
+      console.log("[PositionsTable] Position closed event received");
+      fetchPositions();
+    };
+    window.addEventListener("position-closed", handlePositionClosed);
+    
+    // Listen for visibility change to refresh when tab becomes visible
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        console.log("[PositionsTable] Tab visible, refreshing positions");
+        fetchPositions();
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener("position-opened", handlePositionOpened as EventListener);
+      window.removeEventListener("position-closed", handlePositionClosed);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [fetchPositions]);
+
+  const handleClosePosition = async (positionId: string) => {
+    try {
+      setClosingId(positionId);
+      
+      // Use demo close API for demo positions
+      const response = await fetch("/api/demo/close", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ positionId }),
+      });
+
+      const result = await response.json();
+      
+      if (result.success) {
+        // Remove from local state
+        setApiPositions(prev => prev.filter(p => p.id !== positionId));
+        removePosition(positionId);
+        
+        toast.success(result.message || "Позиция закрыта");
+        // Dispatch event for other components
+        window.dispatchEvent(new CustomEvent("position-closed", { detail: { positionId } }));
+      } else {
+        toast.error(result.error || "Ошибка при закрытии позиции");
+      }
+    } catch (error) {
+      console.error("Failed to close position:", error);
+      toast.error("Ошибка при закрытии позиции");
+    } finally {
+      setClosingId(null);
+    }
+  };
+
+  const handleSharePosition = (position: ApiPosition) => {
+    setSelectedPosition(position);
+    setShowShareCard(true);
+  };
+
+  const formatPrice = (price: number) => {
+    return price.toLocaleString("en-US", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: price < 1 ? 4 : 2,
+    });
+  };
+
+  const formatTime = (dateString: string) => {
+    const date = new Date(dateString);
+    return date.toLocaleTimeString("ru-RU", {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  };
+
+  // Get source icon and label
+  const getSourceInfo = (source?: string) => {
+    switch (source) {
+      case "CHAT":
+        return { icon: <MessageSquare className="h-3 w-3" />, label: "Chat", color: "text-blue-500" };
+      case "TELEGRAM":
+        return { icon: <Bot className="h-3 w-3" />, label: "Telegram", color: "text-sky-500" };
+      case "EXTERNAL":
+        return { icon: <ExternalLinkIcon className="h-3 w-3" />, label: "External", color: "text-purple-500" };
+      case "SIGNAL":
+        return { icon: <TrendingUp className="h-3 w-3" />, label: "Signal", color: "text-amber-500" };
+      case "PLATFORM":
+      default:
+        return { icon: <Monitor className="h-3 w-3" />, label: "Platform", color: "text-muted-foreground" };
+    }
+  };
+
+  return (
+    <>
+      <Card>
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Layers className="h-5 w-5 text-primary" />
+              Открытые позиции
+              {apiPositions.length > 0 && (
+                <Badge variant="secondary" className="ml-2">
+                  {apiPositions.length}
+                </Badge>
+              )}
+              {isDemo && (
+                <span className="text-xs text-amber-500 ml-1">[DEMO]</span>
+              )}
+            </CardTitle>
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              onClick={() => fetchPositions()}
+              disabled={isLoading}
+              title="Обновить"
+            >
+              <RefreshCw className={cn("h-4 w-4", isLoading && "animate-spin")} />
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {isLoading ? (
+            <div className="flex flex-col items-center justify-center py-8">
+              <Loader2 className="h-8 w-8 animate-spin text-primary mb-3" />
+              <p className="text-sm text-muted-foreground">Загрузка позиций...</p>
+            </div>
+          ) : apiPositions.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-8 text-center">
+              <Layers className="h-12 w-12 text-muted-foreground/30 mb-3" />
+              <p className="text-sm text-muted-foreground">
+                Нет открытых позиций
+              </p>
+              <p className="text-xs text-muted-foreground/70 mt-1">
+                Активные сделки будут отображаться здесь
+              </p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-[80px]">Биржа</TableHead>
+                    <TableHead className="w-[100px]">Пара</TableHead>
+                    <TableHead className="w-[80px]">Сторона</TableHead>
+                    <TableHead className="w-[70px]">Источник</TableHead>
+                    <TableHead className="w-[100px]">Размер</TableHead>
+                    <TableHead className="w-[100px]">Цена входа</TableHead>
+                    <TableHead className="w-[100px]">Текущая</TableHead>
+                    <TableHead className="w-[60px]">Плечо</TableHead>
+                    <TableHead className="w-[100px]">PnL</TableHead>
+                    <TableHead className="w-[80px]">Время</TableHead>
+                    <TableHead className="w-[100px]"></TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {apiPositions.map((position) => (
+                    <TableRow key={position.id}>
+                      <TableCell>
+                        <div className="flex items-center gap-1">
+                          <Building2 className="h-3 w-3 text-muted-foreground" />
+                          <span className="text-xs">{position.account?.exchangeName || position.account?.exchangeId}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell className="font-medium">
+                        {position.symbol.replace("USDT", "/USDT")}
+                      </TableCell>
+                      <TableCell>
+                        <Badge
+                          variant="outline"
+                          className={cn(
+                            "text-xs",
+                            position.direction === "LONG"
+                              ? "bg-green-500/10 text-green-500 border-green-500/20"
+                              : "bg-red-500/10 text-red-500 border-red-500/20"
+                          )}
+                        >
+                          {position.direction === "LONG" ? (
+                            <TrendingUp className="mr-1 h-3 w-3" />
+                          ) : (
+                            <TrendingDown className="mr-1 h-3 w-3" />
+                          )}
+                          {position.direction}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        {(() => {
+                          const sourceInfo = getSourceInfo(position.source);
+                          return (
+                            <div className={cn("flex items-center gap-1", sourceInfo.color)} title={sourceInfo.label}>
+                              {sourceInfo.icon}
+                              <span className="text-xs">{sourceInfo.label}</span>
+                            </div>
+                          );
+                        })()}
+                      </TableCell>
+                      <TableCell className="font-mono text-sm">
+                        {position.totalAmount.toFixed(4)}
+                      </TableCell>
+                      <TableCell className="font-mono text-sm">
+                        ${formatPrice(position.avgEntryPrice)}
+                      </TableCell>
+                      <TableCell className="font-mono text-sm">
+                        ${formatPrice(position.currentPrice)}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="secondary" className="text-xs">
+                          {position.leverage}x
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <span
+                          className={cn(
+                            "font-mono text-sm font-medium",
+                            position.unrealizedPnl >= 0
+                              ? "text-green-500"
+                              : "text-red-500"
+                          )}
+                        >
+                          {position.unrealizedPnl >= 0 ? "+" : ""}
+                          ${formatPrice(position.unrealizedPnl)}
+                        </span>
+                      </TableCell>
+                      <TableCell className="text-muted-foreground text-sm">
+                        <div className="flex items-center gap-1">
+                          <Clock className="h-3 w-3" />
+                          {formatTime(position.createdAt)}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-1">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
+                            onClick={() => handleSharePosition(position)}
+                            title="Поделиться"
+                          >
+                            <Share2 className="h-4 w-4 text-muted-foreground hover:text-primary" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-destructive hover:text-destructive"
+                            onClick={() => handleClosePosition(position.id)}
+                            disabled={closingId === position.id}
+                            title="Закрыть позицию"
+                          >
+                            {closingId === position.id ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <X className="h-4 w-4" />
+                            )}
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Share Card Dialog for Open Position */}
+      <ShareCard
+        open={showShareCard}
+        onOpenChange={setShowShareCard}
+        tradeData={selectedPosition ? {
+          symbol: selectedPosition.symbol,
+          direction: selectedPosition.direction as "LONG" | "SHORT",
+          entryPrice: selectedPosition.avgEntryPrice,
+          exitPrice: selectedPosition.currentPrice,
+          pnl: selectedPosition.unrealizedPnl,
+          pnlPercent: ((selectedPosition.currentPrice - selectedPosition.avgEntryPrice) / selectedPosition.avgEntryPrice) * 100 * selectedPosition.leverage,
+          leverage: selectedPosition.leverage,
+          amount: selectedPosition.totalAmount * selectedPosition.avgEntryPrice,
+          exchange: selectedPosition.account?.exchangeName || "Binance",
+        } : undefined}
+      />
+    </>
+  );
+}

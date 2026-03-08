@@ -1,0 +1,38 @@
+{
+  "name": "DCA Moderate",
+  "description": "Умеренная DCA стратегия с 4 уровнями докупки по 3% падения с мультипликатором 1.5x. Баланс между риском и доходностью.",
+  "category": "dca",
+  "botType": "DCA",
+  "version": "1.0.0",
+  "author": "CITARION",
+  "tags": ["moderate", "balanced", "futures", "intermediate"],
+  "config": {
+    "direction": "LONG",
+    "entryType": "MARKET",
+    "baseAmount": 100,
+    "dcaLevels": 4,
+    "dcaPercent": 3,
+    "dcaMultiplier": 1.5,
+    "tpType": "PERCENT",
+    "tpValue": 8,
+    "slEnabled": true,
+    "slType": "PERCENT",
+    "slValue": 12,
+    "trailingEnabled": true,
+    "trailingPercent": 3,
+    "leverage": 3,
+    "marginMode": "ISOLATED"
+  },
+  "defaultParams": {
+    "baseAmountRange": [50, 500],
+    "dcaLevelsRange": [3, 6],
+    "dcaPercentRange": [2, 5]
+  },
+  "riskProfile": "moderate",
+  "recommendedFor": {
+    "marketCondition": "volatile",
+    "volatility": "medium",
+    "timeframe": "1h-4h"
+  },
+  "notes": "Умеренная стратегия с увеличением позиции при падении. Трейлинг стоп защищает накопленную прибыль."
+}
